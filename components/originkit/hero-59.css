@@ -1,0 +1,255 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap");
+
+.hero-59 {
+  --night: #110e1f;
+  --ink: #1c1630;
+  --lavender: #b9acf0;
+  --lavender-bright: #ded5ff;
+  --pale: #ede8ff;
+  --line: rgba(185, 172, 240, 0.24);
+  --display: "Instrument Serif", "Times New Roman", serif;
+  --sans: var(--display);
+  --title: var(--display);
+  --body: var(--display);
+
+  color-scheme: dark;
+  font: 400 19px/1.5 var(--sans);
+  color: var(--pale);
+  background: var(--night);
+  -webkit-font-smoothing: antialiased;
+  background: var(--night);
+  position: relative;
+  isolation: isolate;
+}
+
+.hero-59,
+.hero-59 *,
+.hero-59 *::before,
+.hero-59 *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- Hero shell ---------- */
+.hero-59 .hero {
+  position: relative;
+  min-height: max(640px, var(--ok-design-h, 100vh));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero-59 .hero {
+  background: #1d1938;
+}
+
+/* scene sits lower so the glittering ridge stays clear of the copy;
+   its top edge fades into the hero background */
+.hero-59 .hero__scene {
+  position: absolute;
+  inset: 22% 0 0 0;
+  z-index: 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 22%);
+}
+
+/* shade behind the copy so text stays readable over the sky */
+.hero-59 .hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 55% 75% at 0% 10%,
+      rgba(17, 14, 31, 0.62),
+      rgba(17, 14, 31, 0) 72%
+    ),
+    radial-gradient(
+      ellipse 45% 65% at 100% 10%,
+      rgba(17, 14, 31, 0.55),
+      rgba(17, 14, 31, 0) 72%
+    ),
+    linear-gradient(to bottom, rgba(17, 14, 31, 0.45), rgba(17, 14, 31, 0) 20%);
+}
+
+.hero-59 .hero__inner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 clamp(16px, 4.5vw, 72px);
+  pointer-events: none; /* let pointer reach the scene for its hover parallax */
+}
+.hero-59 .hero__inner a,
+.hero-59 .hero__inner button {
+  pointer-events: auto;
+}
+
+/* ---------- Nav ---------- */
+.hero-59 .nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-59 .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--lavender-bright);
+  text-decoration: none;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.hero-59 .logo svg {
+  width: 30px;
+  height: 30px;
+}
+
+.hero-59 .nav__links {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 2.6vw, 36px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hero-59 .nav__links a {
+  color: rgba(237, 232, 255, 0.78);
+  text-decoration: none;
+  font-size: 1.05rem;
+  font-weight: 400;
+  transition: color 0.2s;
+}
+.hero-59 .nav__links a:hover {
+  color: var(--lavender-bright);
+}
+
+.hero-59 .nav__book {
+  color: var(--lavender-bright);
+  text-decoration: none;
+  font-size: 1.05rem;
+  font-weight: 400;
+  padding: 9px 18px;
+  border: 1px solid rgba(222, 213, 255, 0.5);
+  border-radius: 999px;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
+}
+.hero-59 .nav__book:hover {
+  background: rgba(222, 213, 255, 0.1);
+  border-color: var(--lavender-bright);
+}
+
+/* ---------- Copy: H1 top-left, description + CTA top-right ---------- */
+.hero-59 .hero__copy {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 48px;
+  padding-top: clamp(32px, calc(var(--ok-design-h, 100vh) * 0.06), 64px);
+}
+.hero-59 .hero__title-wrap {
+  max-width: 46rem;
+  min-width: 0;
+}
+.hero-59 .hero__aside {
+  flex: 0 1 25rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 10px;
+}
+
+.hero-59 .hero__title {
+  margin: 0;
+  font-family: var(--title);
+  font-weight: 400;
+  font-size: clamp(3rem, 6.2vw, 5.6rem);
+  line-height: 1;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.hero-59 .hero__desc {
+  margin: 0;
+  font-family: var(--body);
+  font-size: clamp(1.15rem, 1.4vw, 1.3rem);
+  line-height: 1.6;
+  color: #fff;
+  opacity: 0.8;
+}
+
+.hero-59 .cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 28px;
+  padding: 15px 30px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e6deff, #ae9ff0);
+  color: var(--ink);
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 1.15rem;
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 10px 30px -10px rgba(174, 159, 240, 0.7);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.hero-59 .cta:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 14px 36px -10px rgba(174, 159, 240, 0.9);
+}
+
+.hero-59 :focus-visible {
+  outline: 2px solid var(--lavender-bright);
+  outline-offset: 3px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+  .hero-59 .nav__links {
+    display: none;
+  }
+  .hero-59 .nav {
+    padding: 16px 0;
+  }
+  /* the stacked copy runs past 40%, so drop the ridge below the CTA */
+  .hero-59 .hero__scene {
+    inset: 56% 0 0 0;
+  }
+  .hero-59 .hero__copy {
+    flex-direction: column;
+    gap: 18px;
+    padding-top: 32px;
+  }
+  .hero-59 .hero__aside {
+    flex-basis: auto;
+    padding-top: 0;
+  }
+  .hero-59 .cta {
+    margin-top: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-59 .cta,
+  .hero-59 .nav__links a,
+  .hero-59 .nav__book {
+    transition: none;
+  }
+}

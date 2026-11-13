@@ -1,0 +1,58 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Audiowide&family=DM+Mono:wght@400;500&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Hedvig+Letters+Serif:opsz@12..24&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Manrope:wght@400;500;600;700&family=Monda:wght@400;500;600;700&family=Outfit:wght@400;500;600&family=Playfair+Display:ital,wght@0,700;1,700&family=Red+Hat+Display:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Tillana:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "./originkit-section-theme.css";
+@import "../css/styles.css";
+@import "../css/effects.css";
+@import "../css/weight.css";
+@import "../css/plans.css";
+@import "../css/space.css";
+@import "../css/chat-loader.css";
+@import "../css/meal-camera.css";
+@import "../css/account.css";
+@import "../css/auth-screen.css";
+@import "../css/landing-hero.css";
+@import "../css/landing-sections.css";
+
+@font-face {
+  font-family: "Lemi XiaoYu";
+  src: url("/fonts/lemi-xiaoyu.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lemi MuHe YuanTi";
+  src: url("/fonts/lemi-muhe-yuanti.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GuanGe Kai";
+  src: url("/fonts/guan-ge-kai.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root { color-scheme: light; }
+body { font-family: "Raleway", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+button { cursor: pointer; }
+
+.page-panel.is-active {
+  animation: page-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes page-panel-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-panel.is-active { animation: none; }
+}
+
+

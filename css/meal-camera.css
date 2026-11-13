@@ -1,0 +1,620 @@
+@property --meal-shutter-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 33.3%;
+}
+
+.food-upload {
+  container-type: inline-size;
+}
+
+.meal-cam-stage {
+  position: relative;
+  margin-top: 17px;
+  padding: 20px 20px 18px;
+  border: 1px solid #dde6d7;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 14% 18%, #fff8ea 0, transparent 42%),
+    radial-gradient(circle at 84% 82%, #dfe9d7 0, transparent 46%),
+    linear-gradient(135deg, #f3f7ee, #eef3e8 58%, #f7f1e6);
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+  min-height: 272px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.meal-cam-stage::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  right: 7px;
+  width: 5px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(180deg, #d8e1d1 0 6px, transparent 6px 14px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.meal-cam-stage:focus-visible {
+  outline: 2px solid #7d9a7f;
+  outline-offset: 3px;
+}
+
+.meal-cam-stage.is-dragging {
+  border-color: #7d9a7f;
+  box-shadow: inset 0 0 0 2px #7d9a7f33, 0 0 0 3px #7d9a7f12;
+}
+
+.meal-cam {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  justify-self: center;
+}
+
+.meal-cam-body {
+  position: relative;
+  width: 216px;
+  height: 204px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #d5cdbb;
+  border-radius: 20px 20px 26px 26px;
+  background: linear-gradient(160deg, #f8f4e9 0%, #efe9da 62%, #e5dfcf 100%);
+  box-shadow:
+    inset 0 1px 0 #fffdf6,
+    inset 0 -12px 20px #5e544006,
+    0 16px 30px #34413229;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.2s ease, transform 0.12s ease;
+}
+
+.meal-cam-body:focus-visible {
+  outline: 2px solid #7d9a7f;
+  outline-offset: 4px;
+}
+
+.meal-cam-body:disabled {
+  cursor: progress;
+}
+
+.meal-cam-body:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.meal-cam-stripe {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 20px;
+  background: linear-gradient(180deg, #7f9a7d 0 25%, #d8a96b 25% 50%, #c78a60 50% 75%, #ece6d6 75% 100%);
+  opacity: 0.92;
+  z-index: 0;
+}
+
+.meal-cam-viewfinder {
+  position: absolute;
+  top: 13px;
+  left: 31px;
+  width: 44px;
+  height: 32px;
+  border: 3px solid #d4ccba;
+  border-radius: 5px;
+  background: linear-gradient(160deg, #586853, #222d26 72%);
+  box-shadow: inset 0 0 8px #0c120e, 0 1px 0 #fff;
+  z-index: 2;
+}
+
+.meal-cam-viewfinder::before,
+.meal-cam-viewfinder::after {
+  content: "";
+  position: absolute;
+  background: #c4d3b9;
+  opacity: 0.55;
+}
+
+.meal-cam-viewfinder::before {
+  width: 1px;
+  height: 12px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.meal-cam-viewfinder::after {
+  height: 1px;
+  width: 16px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.meal-cam-flash {
+  position: absolute;
+  top: 16px;
+  right: 44px;
+  width: 52px;
+  height: 17px;
+  border: 2px solid #d9d1c0;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, #f4f0e6 0 3px, #ded8c9 3px 5px);
+  box-shadow: inset 0 0 4px #ffffffb3;
+  z-index: 2;
+}
+
+.meal-cam-led {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd3c4;
+  box-shadow: 0 0 0 2px #ece6d8;
+  z-index: 2;
+}
+
+.meal-cam-led.is-ready {
+  background: #88a982;
+  box-shadow: 0 0 7px #88a982e6, 0 0 0 2px #ece6d8;
+}
+
+.meal-cam-led.is-busy {
+  background: #d7a465;
+  box-shadow: 0 0 8px #d7a465e6, 0 0 0 2px #ece6d8;
+  animation: meal-cam-pulse 1s ease-in-out infinite;
+}
+
+.meal-cam-lens {
+  --size: 116px;
+  --ring-width: 5px;
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 36%, #4d5c50, #1a241e 62%, #0d130e 100%);
+  box-shadow:
+    0 10px 18px #161f1833,
+    inset 0 0 0 1px #0b100c,
+    0 0 0 3px #ded5c3,
+    0 0 0 4px #c9c1af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.meal-cam-blades {
+  pointer-events: none;
+  position: absolute;
+  width: calc(var(--size) * 4);
+  height: calc(var(--size) * 4);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  -webkit-mask-image: radial-gradient(circle calc(var(--size) / 2) at center, #000 0, #000 calc(var(--size) / 2 - 1px), #0000 calc(var(--size) / 2));
+  mask-image: radial-gradient(circle calc(var(--size) / 2) at center, #000 0, #000 calc(var(--size) / 2 - 1px), #0000 calc(var(--size) / 2));
+  z-index: 1;
+}
+
+.meal-cam-blades i {
+  --pivot-y: 106%;
+  --meal-shutter-x: 32%;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: calc(50% - var(--pivot-y));
+  left: 0;
+  transform-origin: 50% var(--pivot-y);
+  transform: rotate(calc(var(--blade-i) * 45deg));
+  background: linear-gradient(135deg, #67786a, #36443a 56%, #1a241d);
+  filter: drop-shadow(0 0 2px #000);
+  -webkit-mask-image: linear-gradient(45deg, #000 var(--meal-shutter-x), #0000 var(--meal-shutter-x));
+  mask-image: linear-gradient(45deg, #000 var(--meal-shutter-x), #0000 var(--meal-shutter-x));
+  transition: top 0.15s ease, transform-origin 0.15s ease, --meal-shutter-x 0.15s ease;
+}
+
+.meal-cam-body:not(:disabled):hover .meal-cam-blades i,
+.meal-cam-body:focus-visible .meal-cam-blades i {
+  --pivot-y: 104%;
+  --meal-shutter-x: 29%;
+}
+
+.meal-cam-body:not(:disabled):active .meal-cam-blades i {
+  --pivot-y: 101.3%;
+  --meal-shutter-x: 25.3%;
+}
+
+.meal-cam-body:disabled .meal-cam-blades i {
+  --pivot-y: 104%;
+  --meal-shutter-x: 31%;
+}
+
+.meal-cam-glass {
+  pointer-events: none;
+  position: absolute;
+  inset: var(--ring-width);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 65% 65%, #0000 50%, #ffffff10 52%),
+    radial-gradient(circle at 25% 25%, #0005 20%, #0000 100%);
+  mix-blend-mode: color-dodge;
+  z-index: 2;
+}
+
+.meal-cam-text {
+  position: relative;
+  z-index: -1;
+  pointer-events: none;
+  color: #f3ecdc;
+  font-size: 22px;
+  font-weight: 600;
+  text-shadow: 0 0 16px #0007;
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+}
+
+.meal-cam-body:not(:disabled):hover .meal-cam-text,
+.meal-cam-body:focus-visible .meal-cam-text {
+  opacity: 1;
+}
+
+.meal-cam-focus {
+  pointer-events: none;
+  position: absolute;
+  inset: 9px;
+  z-index: 3;
+  border-radius: 50%;
+  border: 2px dashed #a9b3a5;
+  opacity: 0.55;
+  animation: meal-cam-focus-spin 12s linear infinite;
+}
+
+.meal-cam-ring {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  background: conic-gradient(from 40deg, #8f8b78, #f0e8d3, #898874, #ece3cc, #8f8b78);
+  opacity: 0.72;
+  -webkit-mask-image: radial-gradient(circle at center, #0000 calc(0.5 * var(--size) - var(--ring-width)), #000 calc(0.5 * var(--size) - var(--ring-width) + 1px));
+  mask-image: radial-gradient(circle at center, #0000 calc(0.5 * var(--size) - var(--ring-width)), #000 calc(0.5 * var(--size) - var(--ring-width) + 1px));
+}
+
+@keyframes meal-cam-focus-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.meal-cam-brand {
+  position: absolute;
+  left: 31px;
+  bottom: 15px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: #8a8372;
+  z-index: 2;
+}
+
+.meal-cam-lip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  border-top: 1px solid #cfc7b5;
+  background: linear-gradient(180deg, #e2dccd, #d5cebc);
+  z-index: 3;
+}
+
+.meal-cam-caption {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #8d9889;
+}
+
+.meal-cam-side {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+  min-width: 0;
+}
+
+.meal-cam-title {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: #354b3a;
+}
+
+.meal-cam-copy {
+  margin: 0;
+  max-width: 36em;
+  font-size: 11px;
+  line-height: 1.85;
+  color: #748276;
+}
+
+.meal-cam-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.meal-cam-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 13px;
+  border: 1px solid #d7e2d4;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #54765b;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.meal-cam-action:hover {
+  background: #f0f5ee;
+  border-color: #c4d6bf;
+}
+
+.meal-cam-action:active {
+  transform: translateY(1px);
+}
+
+.meal-cam-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.meal-cam-action.is-primary {
+  background: #5d8063;
+  border-color: #5d8063;
+  color: #fff;
+}
+
+.meal-cam-action.is-primary:hover {
+  background: #4f7155;
+  border-color: #4f7155;
+}
+
+.meal-cam-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #9b7068;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.meal-cam-remove:hover {
+  background: #f7eeeb;
+}
+
+.meal-cam-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.meal-cam-action:focus-visible,
+.meal-cam-remove:focus-visible {
+  outline: 2px solid #7d9a7f;
+  outline-offset: 2px;
+}
+
+.meal-cam-hint {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #9aa39b;
+}
+
+.meal-cam-film {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  margin: 0;
+  padding: 8px 8px 26px;
+  border-radius: 7px;
+  background: #fffdf6;
+  box-shadow: 0 12px 24px #2b392a29;
+  transform-origin: 50% 100%;
+  animation: meal-cam-eject 0.55s cubic-bezier(0.16, 0.84, 0.27, 1) both;
+}
+
+.meal-cam-film img {
+  display: block;
+  width: 100%;
+  height: 190px;
+  object-fit: contain;
+  border-radius: 3px;
+  background: #202820;
+  animation: meal-cam-develop 1.25s ease-out both;
+}
+
+.meal-cam-film figcaption {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  color: #879283;
+}
+
+.meal-cam-film figcaption small {
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  color: #a3ab9f;
+}
+
+.meal-cam-scan {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  height: 190px;
+  border-radius: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.meal-cam-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d9a96c, transparent);
+  box-shadow: 0 0 12px #d9a96ce6;
+  animation: meal-cam-scan 1.8s ease-in-out infinite;
+}
+
+@keyframes meal-cam-eject {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) rotate(-2.4deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(-0.7deg);
+  }
+}
+
+@keyframes meal-cam-develop {
+  0% {
+    opacity: 0.25;
+    filter: grayscale(1) contrast(1.35) brightness(1.25) blur(3px);
+  }
+  60% {
+    opacity: 1;
+    filter: grayscale(0.35) contrast(1.08) brightness(1.02) blur(0);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes meal-cam-scan {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateY(186px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes meal-cam-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+@container (max-width: 600px) {
+  .meal-cam-stage {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 18px;
+    min-height: 0;
+    padding: 18px 16px;
+  }
+
+  .meal-cam-side {
+    width: 100%;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .meal-cam-copy {
+    max-width: 32em;
+  }
+
+  .meal-cam-actions {
+    justify-content: center;
+  }
+
+  .meal-cam-film {
+    max-width: 340px;
+  }
+
+  .meal-cam-stage.has-film .meal-cam {
+    display: none;
+  }
+}
+
+@container (max-width: 250px) {
+  .meal-cam {
+    display: none;
+  }
+
+  .meal-cam-side {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .meal-cam-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meal-cam-film,
+  .meal-cam-film img,
+  .meal-cam-scan::before,
+  .meal-cam-led.is-busy,
+  .meal-cam-focus {
+    animation: none;
+  }
+
+  .meal-cam-blades i,
+  .meal-cam-text,
+  .meal-cam-action {
+    transition: none;
+  }
+}
