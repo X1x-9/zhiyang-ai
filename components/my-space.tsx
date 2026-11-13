@@ -378,6 +378,7 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
       heightCm: syncedDraft.heightCm.trim(),
       weightKg: syncedDraft.weightKg.trim(),
       targetWeightKg: syncedDraft.targetWeightKg.trim(),
+      city: syncedDraft.city.trim(),
       avoid: syncedDraft.avoid.trim(),
       budget: syncedDraft.budget.trim(),
       source: isDemo ? "demo" : "local",
@@ -668,6 +669,20 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
                   aria-invalid={Boolean(errors.targetWeightKg)}
                   aria-describedby={errors.targetWeightKg ? "ms-target-weight-error" : undefined}
                   onChange={(event) => update("targetWeightKg", event.target.value)}
+                />
+              </Field>
+
+              <Field id="ms-city" label="所在城市" hint="选填 · 训练计划会参考天气" error={errors.city}>
+                <input
+                  className="ms-input"
+                  id="ms-city"
+                  value={draft.city}
+                  maxLength={20}
+                  autoComplete="address-level2"
+                  placeholder="例如 杭州"
+                  aria-invalid={Boolean(errors.city)}
+                  aria-describedby={errors.city ? "ms-city-error" : undefined}
+                  onChange={(event) => update("city", event.target.value)}
                 />
               </Field>
             </div>

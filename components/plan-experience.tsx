@@ -954,12 +954,18 @@ const sessionToneLabels: Record<SpaceSession["tone"], string> = {
 function GeneratedMovement({ plan }: { plan: PlanDocument }) {
   const [openDay, setOpenDay] = React.useState<string | null>(null);
   const toggleDay = (label: string) => setOpenDay((current) => current === label ? null : label);
+  const weather = plan.movement.weather;
   return (
     <div className="pp-generated-block">
       <div className="pp-generated-subhead">
         <strong>一周的安排</strong>
         <span>{plan.movement.environmentLabel} · {plan.movement.sessionCount} 次 · 约 {plan.movement.totalMinutes} 分钟</span>
       </div>
+      {weather && weather.adjustments.length > 0 && (
+        <p className="pp-generated-weather">
+          已参考 {weather.city} 的天气预报：{weather.adjustments.map((item) => `${item.day}${item.reason}，${item.from}改为${item.to}`).join("；")}。
+        </p>
+      )}
       <div className="pp-generated-week">
         {plan.movement.week.map((day) => {
           const session = day.session;

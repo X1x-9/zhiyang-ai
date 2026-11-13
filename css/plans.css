@@ -2174,6 +2174,14 @@
 
 .pp-generated-subhead span { color: #7a8a7e; font-size: 11.5px; font-weight: 500; }
 
+.pp-generated-weather {
+  margin: -2px 0 0;
+  color: #5d6f61;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
 .pp-generated-notes {
   display: grid;
   gap: 3px;

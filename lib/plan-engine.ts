@@ -13,10 +13,12 @@ import {
   type SpaceDiet,
   type SpaceEquipment,
   type SpaceMinutes,
+  type MovementWeatherForecast,
   type SpaceProfile,
   type SpaceTargets,
 } from "./space";
 import type { PlanMealSummary } from "./plan-context";
+import type { WeatherForecast } from "./weather";
 
 export const PLAN_SCHEMA_VERSION = 3;
 export const PLAN_ENGINE_VERSION = "2026-11.4";
@@ -217,6 +219,7 @@ export type PlanBuildOptions = {
   previousPlan?: PlanDocument | null;
   revisionDirective?: PlanRevisionDirective | null;
   revisionRequest?: string | null;
+  weather?: WeatherForecast | null;
 };
 
 function num(value: string) {
@@ -232,6 +235,7 @@ const fingerprintFields = [
   "heightCm",
   "weightKg",
   "targetWeightKg",
+  "city",
   "goal",
   "activity",
   "days",
@@ -309,6 +313,7 @@ function usedProfileFields(profile: SpaceProfile) {
   if (profile.heightCm.trim()) usedFields.push("身高");
   if (profile.weightKg.trim()) usedFields.push("体重");
   if (profile.targetWeightKg.trim()) usedFields.push("目标体重");
+  if (profile.city.trim()) usedFields.push("所在城市");
   if (profile.avoid.trim()) usedFields.push("忌口");
   if (profile.budget.trim()) usedFields.push("预算");
   return usedFields;
@@ -393,16 +398,52 @@ function buildPlanDiet(profile: SpaceProfile, state: PlanRevisionState | null | 
   };
 }
 
-function buildPlanMovement(profile: SpaceProfile, state: PlanRevisionState | null | undefined) {
+function buildPlanMovement(profile: SpaceProfile, state: PlanRevisionState | null | undefined, weather: WeatherForecast | null | undefined, now: Date) {
   const movement = state?.movement;
-  if (!movement) return buildMovementPlan(profile);
-  const next: SpaceProfile = {
-    ...profile,
-    days: movement.days ?? profile.days,
-    minutes: movement.minutes ?? profile.minutes,
-    equipment: movement.equipment ?? profile.equipment,
-  };
-  return buildMovementPlan(next);
+  const next: SpaceProfile = movement
+    ? {
+        ...profile,
+        days: movement.days ?? profile.days,
+        minutes: movement.minutes ?? profile.minutes,
+        equipment: movement.equipment ?? profile.equipment,
+      }
+    : profile;
+  return buildMovementPlan(next, toMovementWeather(weather, now));
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function currentWeekDates(now: Date) {
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    return `${day.getFullYear()}-${padDatePart(day.getMonth() + 1)}-${padDatePart(day.getDate())}`;
+  });
+}
+
+function toMovementWeather(weather: WeatherForecast | null | undefined, now: Date): MovementWeatherForecast | null {
+  if (!weather?.ok || !weather.city || weather.days.length === 0) return null;
+  const weekDates = currentWeekDates(now);
+  const days = weather.days.flatMap((day) => {
+    const weekday = weekDates.indexOf(day.date);
+    if (weekday === -1) return [];
+    return [{
+      weekday,
+      date: day.date,
+      weather: day.weather,
+      precipitationProbability: day.precipitationProbability,
+      tempMaxC: day.tempMaxC,
+      tempMinC: day.tempMinC,
+      windSpeedMaxKmh: day.windSpeedMaxKmh,
+    }];
+  });
+  if (days.length === 0) return null;
+  return { city: weather.city, days };
 }
 
 function buildDataBasis(profile: SpaceProfile, targets: SpaceTargets | null, mealSummary?: PlanMealSummary | null, agent?: PlanAgentDraft | null, revision?: PlanRevisionDirective | null): PlanDataBasis {
@@ -583,7 +624,7 @@ export function buildPlan(profile: SpaceProfile, version = 1, now = new Date(), 
   const previousPlan = options.previousPlan ?? null;
   const revisionState = mergeRevisionState(previousPlan?.revisionState, revisionDirective);
   const diet = buildPlanDiet(profile, revisionState);
-  const movement = buildPlanMovement(profile, revisionState);
+  const movement = buildPlanMovement(profile, revisionState, options.weather, now);
   const completeness = spaceCompleteness(profile);
   const targets = targetResult.targets;
   const mealSummary = options.mealSummary;

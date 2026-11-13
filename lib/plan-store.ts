@@ -8,6 +8,7 @@ import { buildPlan, type PlanDocument, type PlanRevisionDirective, type PlanVers
 import { requestPlanRevision } from "./plan-revision";
 import { getPrisma } from "./prisma";
 import { buildSpaceTargets, type SpaceProfile } from "./space";
+import { getWeatherForecast, type WeatherForecast } from "./weather";
 
 export type StoredPlan = {
   plan: PlanDocument;
@@ -105,16 +106,34 @@ function planContext(profile: SpaceProfile, meals: PlanMealRecord[], currentPlan
   return { targets, mealSummary, nextVersion };
 }
 
-async function runPlanDraft(profile: SpaceProfile, meals: PlanMealRecord[], currentPlan: PlanDocument | null) {
+async function runPlanDraft(
+  profile: SpaceProfile,
+  meals: PlanMealRecord[],
+  currentPlan: PlanDocument | null,
+  revision: { directive: PlanRevisionDirective | null; request: string | null },
+) {
   const { mealSummary, nextVersion, targets } = planContext(profile, meals, currentPlan);
+  const city = profile.city.trim();
+  const weather: WeatherForecast | null = city
+    ? await getWeatherForecast(city, 3).catch(() => null)
+    : null;
+  const preview = buildPlan(profile, nextVersion, new Date(), {
+    mealSummary,
+    previousPlan: currentPlan,
+    revisionDirective: revision.directive,
+    revisionRequest: revision.request,
+    weather,
+  });
   const agent = await runPlanAgent({
     profile,
     targets,
     mealSummary,
     currentPlanVersion: currentPlan?.version ?? null,
     nextVersion,
+    weather,
+    movement: preview.movement,
   });
-  return { mealSummary, agent };
+  return { mealSummary, agent, weather };
 }
 
 async function resolveRevision(
@@ -148,6 +167,7 @@ function composePlan(
   agent: Awaited<ReturnType<typeof runPlanDraft>>["agent"],
   previousPlan: PlanDocument | null,
   revision: { directive: PlanRevisionDirective | null; request: string | null },
+  weather: Awaited<ReturnType<typeof runPlanDraft>>["weather"],
 ) {
   return buildPlan(profile, (previousPlan?.version ?? 0) + 1, new Date(), {
     mealSummary,
@@ -155,6 +175,7 @@ function composePlan(
     previousPlan,
     revisionDirective: revision.directive,
     revisionRequest: revision.request,
+    weather,
   });
 }
 
@@ -199,8 +220,8 @@ export async function generatePlanVersion(
     const revision = revisionOverride
       ? resolveRevisionOverride(current, revisionOverride)
       : await resolveRevision(feedback, profile, current);
-    const draft = await runPlanDraft(profile, demoMealsForPlan(identity), current);
-    const plan = composePlan(profile, draft.mealSummary, draft.agent, current, revision);
+    const draft = await runPlanDraft(profile, demoMealsForPlan(identity), current, revision);
+    const plan = composePlan(profile, draft.mealSummary, draft.agent, current, revision, draft.weather);
     return saveToMemory(identity, plan);
   }
   if (!process.env.DATABASE_URL) throw new PlanStorageError();
@@ -251,10 +272,10 @@ export async function generatePlanVersion(
     carbsG: meal.carbsG,
     fatG: meal.fatG,
   }));
-  const draft = await runPlanDraft(profile, meals, currentPlan);
+  const draft = await runPlanDraft(profile, meals, currentPlan, revision);
 
   for (let attempt = 0; ; attempt += 1) {
-    const plan = composePlan(profile, draft.mealSummary, draft.agent, currentPlan, revision);
+    const plan = composePlan(profile, draft.mealSummary, draft.agent, currentPlan, revision, draft.weather);
     try {
       await prisma.planVersion.create({
         data: { profileId: identity.profileId, version: plan.version, plan },

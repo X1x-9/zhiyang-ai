@@ -24,6 +24,7 @@ export type SpaceProfile = {
   heightCm: string;
   weightKg: string;
   targetWeightKg: string;
+  city: string;
   goal: SpaceGoal | "";
   activity: SpaceActivity | "";
   days: SpaceDays | "";
@@ -198,6 +199,7 @@ export function createDemoSpaceProfile(name = "林同学", weightKg: number | nu
     heightCm: "168",
     weightKg: weightKg ? String(weightKg) : "63.4",
     targetWeightKg: "58",
+    city: "",
     goal: "lose",
     activity: "light",
     days: "3",
@@ -224,6 +226,7 @@ export function createEmptySpaceProfile(name = ""): SpaceProfile {  return {
     heightCm: "",
     weightKg: "",
     targetWeightKg: "",
+    city: "",
     goal: "",
     activity: "",
     days: "",
@@ -246,6 +249,7 @@ export function normalizeSpaceProfile(raw: unknown): SpaceProfile | null {
     heightCm: text(value.heightCm, "", 6),
     weightKg: text(value.weightKg, "", 6),
     targetWeightKg: text(value.targetWeightKg, "", 6),
+    city: text(value.city, "", 20),
     goal: pickChoice(value.goal, ["lose", "maintain", "gain", "steady"]),
     activity: pickChoice(value.activity, ["low", "light", "moderate", "high"]),
     days: pickChoice(value.days, ["2", "3", "4", "5"]),
@@ -435,7 +439,7 @@ export function buildDietPlan(profile: SpaceProfile) {
 
 type SessionTone = "strength" | "cardio" | "mobility";
 
-type SessionTemplate = { title: string; focus: string; requires?: SpaceEquipment[] };
+type SessionTemplate = { title: string; focus: string; requires?: SpaceEquipment[]; outdoor?: boolean };
 
 const sessionCatalog: Record<SessionTone, SessionTemplate[]> = {
   strength: [
@@ -455,9 +459,9 @@ const sessionCatalog: Record<SessionTone, SessionTemplate[]> = {
     { title: "跑步机间歇", focus: "快走与慢走交替，按呼吸调整", requires: ["treadmill"] },
     { title: "动感单车", focus: "低冲击，保持均匀呼吸", requires: ["bike"] },
     { title: "跳绳间歇", focus: "跳 1 分钟 · 休息 30 秒", requires: ["rope"] },
-    { title: "快走", focus: "能说短句的速度，保持节奏" },
+    { title: "快走", focus: "能说短句的速度，保持节奏", outdoor: true },
     { title: "室内有氧", focus: "原地走 · 低冲击开合步" },
-    { title: "轻快走", focus: "平地快走，最后 3 分钟放慢" },
+    { title: "轻快走", focus: "平地快走，最后 3 分钟放慢", outdoor: true },
   ],
   mobility: [
     { title: "垫上活动度", focus: "肩颈 · 髋部 · 小腿拉伸", requires: ["yoga_mat"] },
@@ -490,14 +494,56 @@ export type SpaceSession = {
   focus: string;
   minutes: number;
   tone: SessionTone;
+  outdoor?: boolean;
 };
 
-export function buildMovementPlan(profile: SpaceProfile): {
+export type MovementWeatherDay = {
+  weekday: number;
+  date: string;
+  weather: string;
+  precipitationProbability: number | null;
+  tempMaxC: number | null;
+  tempMinC: number | null;
+  windSpeedMaxKmh: number | null;
+};
+
+export type MovementWeatherForecast = {
+  city: string;
+  days: MovementWeatherDay[];
+};
+
+export type MovementWeatherAdjustment = {
+  day: string;
+  date: string;
+  from: string;
+  to: string;
+  reason: string;
+};
+
+export type MovementWeather = {
+  city: string;
+  adjustments: MovementWeatherAdjustment[];
+};
+
+function outdoorWeatherRisk(day: MovementWeatherDay): string | null {
+  if (/雨|雪|雷|冰雹/.test(day.weather)) return `${day.weather}，户外训练不便`;
+  if (day.precipitationProbability !== null && day.precipitationProbability >= 60) return `降水概率 ${day.precipitationProbability}%`;
+  if (day.tempMaxC !== null && day.tempMaxC >= 35) return `最高 ${day.tempMaxC}°C`;
+  if (day.tempMinC !== null && day.tempMinC <= 0) return `最低 ${day.tempMinC}°C`;
+  if (day.windSpeedMaxKmh !== null && day.windSpeedMaxKmh >= 39) return `最大风速 ${Math.round(day.windSpeedMaxKmh)} km/h`;
+  return null;
+}
+
+export function buildMovementPlan(
+  profile: SpaceProfile,
+  weather?: MovementWeatherForecast | null,
+): {
   sessions: SpaceSession[];
   week: Array<{ label: string; short: string; session: SpaceSession | null }>;
   sessionCount: number;
   totalMinutes: number;
   environmentLabel: string;
+  weather: MovementWeather | null;
 } {
   const equipment = profile.equipment ?? [];
   if (!profile.goal || !profile.days || !profile.minutes || equipment.length === 0) {
@@ -507,6 +553,7 @@ export function buildMovementPlan(profile: SpaceProfile): {
       sessionCount: 0,
       totalMinutes: 0,
       environmentLabel: equipmentText(equipment),
+      weather: null,
     };
   }
   const totalMinutes = Number(profile.minutes);
@@ -517,6 +564,9 @@ export function buildMovementPlan(profile: SpaceProfile): {
   const eligible = (tone: SessionTone) => sessionCatalog[tone].filter(
     (template) => !template.requires?.length || template.requires.every(owns),
   );
+  const forecastByDay = new Map<number, MovementWeatherDay>();
+  for (const day of weather?.days ?? []) forecastByDay.set(day.weekday, day);
+  const adjustments: MovementWeatherAdjustment[] = [];
 
   const sessions: SpaceSession[] = days.map((dayIndex, index) => {
     const tone = pattern[index % pattern.length];
@@ -524,7 +574,14 @@ export function buildMovementPlan(profile: SpaceProfile): {
     const template = options[used[tone] % options.length];
     used[tone] += 1;
     const minutes = tone === "mobility" ? Math.min(totalMinutes, 20) : totalMinutes;
-    return { day: weekLabels[dayIndex], short: weekShorts[dayIndex], title: template.title, focus: template.focus, minutes, tone };
+    const session: SpaceSession = { day: weekLabels[dayIndex], short: weekShorts[dayIndex], title: template.title, focus: template.focus, minutes, tone, outdoor: template.outdoor };
+    const forecast = forecastByDay.get(dayIndex);
+    const risk = forecast && template.outdoor ? outdoorWeatherRisk(forecast) : null;
+    if (forecast && risk) {
+      adjustments.push({ day: weekLabels[dayIndex], date: forecast.date, from: template.title, to: "室内有氧", reason: risk });
+      return { ...session, title: "室内有氧", focus: "原地走 · 低冲击开合步", outdoor: false };
+    }
+    return session;
   });
 
   const byDay = new Map<number, SpaceSession>();
@@ -541,11 +598,13 @@ export function buildMovementPlan(profile: SpaceProfile): {
     sessionCount: sessions.length,
     totalMinutes: sessions.reduce((sum, session) => sum + session.minutes, 0),
     environmentLabel: equipmentText(equipment),
+    weather: weather ? { city: weather.city, adjustments } : null,
   };
 }
 
-export function buildSpacePlans(profile: SpaceProfile) {
-  const targetResult = buildSpaceTargets(profile);
+export type MovementPlan = ReturnType<typeof buildMovementPlan>;
+
+export function buildSpacePlans(profile: SpaceProfile) {  const targetResult = buildSpaceTargets(profile);
   return {
     completeness: spaceCompleteness(profile),
     targets: targetResult.targets,
@@ -556,7 +615,7 @@ export function buildSpacePlans(profile: SpaceProfile) {
   };
 }
 
-export type SpaceFieldErrorKey = "name" | "age" | "heightCm" | "weightKg" | "targetWeightKg" | "budget" | "avoid" | "goal" | "activity" | "days" | "minutes" | "equipment" | "diet";
+export type SpaceFieldErrorKey = "name" | "age" | "heightCm" | "weightKg" | "targetWeightKg" | "city" | "budget" | "avoid" | "goal" | "activity" | "days" | "minutes" | "equipment" | "diet";
 export type SpaceFieldErrors = Partial<Record<SpaceFieldErrorKey, string>>;
 
 export function validateSpaceProfile(profile: SpaceProfile): SpaceFieldErrors {
@@ -591,6 +650,10 @@ export function validateSpaceProfile(profile: SpaceProfile): SpaceFieldErrors {
   if (weight !== null && target !== null) {
     if (profile.goal === "lose" && target >= weight) errors.targetWeightKg = "减脂目标通常应低于当前体重，请再确认。";
     if (profile.goal === "gain" && target <= weight) errors.targetWeightKg = "增肌目标通常应高于当前体重，请再确认。";
+  }
+  const city = profile.city.trim();
+  if (city && (city.length < 2 || city.length > 20)) {
+    errors.city = "填写 2–20 个字的城市名，例如「杭州」。";
   }
   const budget = numeric(profile.budget);
   if (profile.budget.trim() && (budget === null || budget < 0 || budget > 1000)) {

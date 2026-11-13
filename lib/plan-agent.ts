@@ -13,7 +13,8 @@ import type {
 } from "./plan-engine";
 import type { PlanMealSummary } from "./plan-context";
 import { isRagConfigured, searchKnowledge } from "./rag";
-import { activityText, dietText, equipmentText, goalText, type SpaceProfile, type SpaceTargets } from "./space";
+import { activityText, dietText, equipmentText, goalText, type MovementPlan, type SpaceProfile, type SpaceTargets } from "./space";
+import { getWeatherForecast, type WeatherForecast } from "./weather";
 
 type PlanAgentInput = {
   profile: SpaceProfile;
@@ -21,6 +22,8 @@ type PlanAgentInput = {
   mealSummary: PlanMealSummary;
   currentPlanVersion: number | null;
   nextVersion: number;
+  weather: WeatherForecast | null;
+  movement: MovementPlan;
 };
 
 const focusLabels: Record<Exclude<PlanFocus, "none">, string> = {
@@ -116,6 +119,8 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
     ragCalled: false,
     mealToolCalled: false,
     targetToolCalled: false,
+    weatherUsed: false,
+    weatherForecast: null as WeatherForecast | null,
     toolLog: [] as PlanAgentToolLog[],
   };
 
@@ -145,6 +150,40 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
           note: input.targets
             ? "这些是估算参考，不是处方；不要承诺减重速度或治疗效果。"
             : "资料不足，不能生成热量与蛋白质参考；不要自行编造。",
+        };
+      },
+    }),
+    getWeatherForecast: tool({
+      description: "读取用户资料里所在城市未来 1–3 天的实时预报，用于判断训练日是否受降雨、极端温度或大风影响。没有城市或服务不可用时会明确失败，禁止编造天气。",
+      inputSchema: z.object({ days: z.number().int().min(1).max(3).optional() }),
+      execute: async ({ days }) => {
+        const city = input.profile.city.trim();
+        if (!city) {
+          captured.toolLog.push(toolLog("getWeatherForecast", "REJECTED", "资料未填写所在城市"));
+          return { status: "NO_CITY", message: "资料里没有所在城市；不要给出天气结论，也不要声称参考过天气。" };
+        }
+        const forecast = input.weather?.ok ? input.weather : await getWeatherForecast(city, days ?? 3);
+        if (!forecast.ok) {
+          captured.toolLog.push(toolLog("getWeatherForecast", "ERROR", `${city}：${forecast.note}`));
+          return { status: "UNAVAILABLE", message: forecast.note };
+        }
+        const list = forecast.days.slice(0, days ?? 3);
+        captured.weatherUsed = true;
+        captured.weatherForecast = forecast;
+        captured.toolLog.push(toolLog(
+          "getWeatherForecast",
+          "OK",
+          `${forecast.city ?? city}：${list.map((day) => `${day.date.slice(5)} ${day.weather}`).join(" · ")}`,
+        ));
+        return {
+          status: "OK",
+          city: forecast.city ?? city,
+          region: forecast.region,
+          days: list.map((day) => ({
+            ...day,
+            weekday: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][new Date(`${day.date}T00:00:00`).getDay()] ?? "",
+          })),
+          note: "只能按这些实时预报说明训练安排；数据里没有的内容不要推断。",
         };
       },
     }),
@@ -223,7 +262,7 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
       description: "添加一条给用户的调整说明。只能引用工具返回的资料；禁止诊断、治疗、疗效保证或编造来源。最多 3 条。",
       inputSchema: z.object({
         note: z.string().trim().min(8).max(140),
-        basis: z.enum(["profile", "meals", "guideline", "safety"]),
+        basis: z.enum(["profile", "meals", "guideline", "safety", "weather"]),
         referenceIndex: z.number().int().min(1).max(20).optional(),
       }),
       execute: async ({ note, basis, referenceIndex }) => {
@@ -246,6 +285,10 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
             reason: `basis 为 guideline 时必须传 referenceIndex，取值为 1 到 ${captured.references.length}，对应 searchGuidelines 返回的 references 编号。`,
           };
         }
+        if (basis === "weather" && !(captured.weatherUsed && captured.weatherForecast?.ok)) {
+          captured.toolLog.push(toolLog("addCoachNote", "REJECTED", "没有可用的天气数据"));
+          return { accepted: false, reason: "先调用 getWeatherForecast 拿到实时预报；没有天气数据时不要写天气说明，也不要声称参考过天气。" };
+        }
         if (basis !== "guideline" && referenceIndex !== undefined) {
           captured.toolLog.push(toolLog("addCoachNote", "REJECTED", "非指南说明不能绑定引用"));
           return { accepted: false, reason: "只有 basis 为 guideline 的说明才能传 referenceIndex。" };
@@ -266,7 +309,7 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
         if (basis === "guideline" && referenceIndex !== undefined) {
           captured.citations.push({ note, referenceIndex });
         }
-        captured.toolLog.push(toolLog("addCoachNote", "OK", `已添加${basis === "meals" ? "餐食" : basis === "guideline" ? `指南（引用 #${referenceIndex}）` : basis === "safety" ? "安全" : "资料"}说明`));
+        captured.toolLog.push(toolLog("addCoachNote", "OK", `已添加${basis === "meals" ? "餐食" : basis === "guideline" ? `指南（引用 #${referenceIndex}）` : basis === "safety" ? "安全" : basis === "weather" ? "天气" : "资料"}说明`));
         return { accepted: true, note, referenceIndex: basis === "guideline" ? referenceIndex : undefined };
       },
     }),
@@ -286,11 +329,22 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
       avoid: input.profile.avoid,
       avoidProvided: Boolean(input.profile.avoid.trim()),
       budget: input.profile.budget,
+      city: input.profile.city.trim() || null,
       days: input.profile.days,
       minutes: input.profile.minutes,
     },
     targets: input.targets,
     mealSummary: input.mealSummary,
+    movement: {
+      sessions: input.movement.sessions.map((session) => ({
+        day: session.day,
+        title: session.title,
+        minutes: session.minutes,
+        tone: session.tone,
+        outdoor: Boolean(session.outdoor),
+      })),
+      weatherAdjustments: input.movement.weather?.adjustments ?? [],
+    },
     currentPlanVersion: input.currentPlanVersion,
     nextVersion: input.nextVersion,
   };
@@ -300,6 +354,9 @@ export async function runPlanAgent(input: PlanAgentInput): Promise<PlanAgentDraf
     "你不是医生或营养师，不能诊断、治疗、开处方、承诺疗效或减重速度。",
     "你不能直接写计划，也不能计算营养数值；营养计算、记录汇总和安全边界都由工具完成。",
     "先调用 getRecentMealSummary、getNutritionTargets、searchGuidelines 了解依据，再决定是否调用 applyFocus。",
+    "如果资料里填写了所在城市，先调用 getWeatherForecast 查看未来 1–3 天预报。上下文 movement 是规则引擎已经排好的训练安排：只有未来训练日里确实有 outdoor 为 true 的户外项目时，才用 addCoachNote（basis 选 weather）说明天气影响；如果 movement.weatherAdjustments 已经记录了调整，照记录说明；那天本来没有户外项目时，只提醒天气，不要声称改过训练。",
+    "不能修改训练安排；不要声称把某个项目改了，除非 weatherAdjustments 里确实有这条记录。",
+    "资料没有城市或天气服务失败时，不要提天气结论，也不要声称参考过天气；不能用常识或历史经验代替实时预报。",
     "只有 getRecentMealSummary 返回的 signals 中明确存在对应信号时，才能调用 applyFocus；没有足够完整的餐食记录时，保持不调整。",
     "用户资料里的 avoid 字段已经完整提供给你（见上下文 profile.avoid）。如果 avoid 不为空，禁止声称忌口未读取、未提供或未能完整读取；只能提醒外食和配料表仍需本人确认，也不要说计划已逐项避开。只有 avoid 为空时，才可以说用户没有填写忌口。",
     "调用 addCoachNote 写 1 到 3 条简短说明，分别说明本次依据、没有改动什么、下一步怎么做。",
