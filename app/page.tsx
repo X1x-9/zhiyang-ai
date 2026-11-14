@@ -42,18 +42,18 @@ const navigation = [
 ] as const;
 
 const REVIEW_TITLE_IMAGES: [string, string] = [
-  "/images/review-heading-mountain.webp",
-  "/images/zhiyang-hero-meadow.webp",
+  "/images/review/review-heading-mountain.webp",
+  "/images/hero/zhiyang-hero-meadow.webp",
 ];
 
 const REVIEW_FRAME_VEGGIES = [
-  "/images/review-veggie-broccoli.webp",
-  "/images/review-veggie-banana.webp",
-  "/images/review-veggie-cabbage.webp",
-  "/images/review-veggie-pepper.webp",
-  "/images/review-veggie-kiwi.webp",
-  "/images/review-veggie-grape.webp",
-  "/images/review-veggie-carrot.webp",
+  "/images/review/review-veggie-broccoli.webp",
+  "/images/review/review-veggie-banana.webp",
+  "/images/review/review-veggie-cabbage.webp",
+  "/images/review/review-veggie-pepper.webp",
+  "/images/review/review-veggie-kiwi.webp",
+  "/images/review/review-veggie-grape.webp",
+  "/images/review/review-veggie-carrot.webp",
 ];
 
 function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
@@ -1382,7 +1382,7 @@ function CoreApp({ onHome }: { onHome: () => void }) {
           <strong>慢一点，也算在前进。</strong>
           <button className="coach-cta" onClick={() => setPage("coach")}>
             <i className="animation" aria-hidden="true" />
-            和教练聊聊
+            和搭子聊聊
             <i className="animation" aria-hidden="true" />
           </button>
         </div>
@@ -1455,12 +1455,33 @@ const landingAnchors: Partial<Record<Page, string>> = {
 export default function HomePage() {
   const [landing, setLanding] = React.useState(true);
   const returnAnchor = React.useRef<string | null>(null);
+  const enteringRef = React.useRef(false);
+  const queryClient = useQueryClient();
 
-  const enterCore = React.useCallback((target: Page, anchor?: string) => {
+  React.useEffect(() => {
+    if (!landing) return;
+    void queryClient.prefetchQuery({ queryKey: ["profile"], queryFn: fetchProfile, retry: authAwareRetry });
+    void queryClient.prefetchQuery({ queryKey: ["dashboard"], queryFn: getDashboard, retry: authAwareRetry });
+  }, [landing, queryClient]);
+
+  const enterCore = React.useCallback(async (target: Page, anchor?: string) => {
+    if (enteringRef.current) return;
+    enteringRef.current = true;
     returnAnchor.current = anchor ?? null;
     useHealthStore.getState().setPage(target);
-    setLanding(false);
-  }, []);
+    try {
+      await Promise.race([
+        Promise.allSettled([
+          queryClient.ensureQueryData({ queryKey: ["profile"], queryFn: fetchProfile, retry: authAwareRetry }),
+          queryClient.ensureQueryData({ queryKey: ["dashboard"], queryFn: getDashboard, retry: authAwareRetry }),
+        ]),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    } finally {
+      setLanding(false);
+      enteringRef.current = false;
+    }
+  }, [queryClient]);
 
   React.useEffect(() => {
     if (!landing) {

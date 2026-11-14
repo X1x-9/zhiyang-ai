@@ -5,7 +5,7 @@ import "@/app/globals.css";
 
 export const metadata: Metadata = {
   title: "智养 AI — 让健康计划跟得上真实生活",
-  description: "懂你的饮食、训练与日常节奏的健康生活教练。",
+  description: "懂你的饮食、训练与日常节奏的健康生活搭子。",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

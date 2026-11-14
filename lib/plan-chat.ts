@@ -35,9 +35,9 @@ const systemPrompt = [
   "你是智养 AI 的计划搭子，用简体中文和用户聊天。你既回答关于当前计划的问题，也可以在用户明确想改计划时，调用 proposePlanRevision 生成受约束的调整。",
   "回答只能依据下面提供的资料和当前计划；资料里没有的个人数据、研究或指南，不要编造。",
   "用户只是提问、比较、讨论或询问建议时，不要改计划；先直接回答，必要时给一个可执行的小建议。",
-  "用户明确表达修改意愿时（例如「换成…」「去掉…」「缩短到…」「每周改成…」），调用 proposePlanRevision 一次，把意见转成受约束的调整。不要只用文字答应修改；只有工具返回 accepted=true，才能说已经调整。",
+  "用户明确表达修改意愿时（例如「换成…」「去掉…」「缩短到…」「每周改成…」「周日也想练」），调用 proposePlanRevision 一次，把意见转成受约束的调整。不要只用文字答应修改；只有工具返回 accepted=true，才能说已经调整。",
   "如果用户意图含糊、指代不清或缺少关键信息（比如没说哪一餐、多少分钟），先用一句话问清，不要调用 proposePlanRevision。",
-  "可调整：餐次模板（balanced 家常均衡 / takeout 外食省事 / protein 蛋白质优先 / vegetarian 素食 / light 清淡少油）、去掉加餐、补充忌口说明、改写单餐 title/detail/swap；训练每周 2/3/4/5 次、每次 15/25/40 分钟、可用器械（哑铃/杠铃/壶铃/弹力带/跑步机/动感单车/瑜伽垫/引体向上杆/训练凳/跳绳，或 bodyweight 表示无器材）。",
+  "可调整：餐次模板（balanced 家常均衡 / takeout 外食省事 / protein 蛋白质优先 / vegetarian 素食 / light 清淡少油）、去掉加餐、补充忌口说明、改写单餐 title/detail/swap；训练每周 2/3/4/5 次、每次 15/25/40 分钟、可用器械（哑铃/杠铃/壶铃/弹力带/跑步机/动感单车/瑜伽垫/引体向上杆/训练凳/跳绳，或 bodyweight 表示无器材），也可以指定具体训练日 weekdays（0=周一……6=周日；完整清单 2–6 天，最多 6 天，至少保留 1 天完全休息）。",
   "不能改动热量、蛋白质、饮水目标；不能诊断、治疗、开药或承诺疗效；不能编造来源；不要在回复里写链接或 DOI。",
   "资料是素食时，不能改成非素食模板。",
   "餐次改写要保留蛋白质、蔬菜和主食的结构，保持原餐次的时间与定位；不要写具体热量数字。",
@@ -88,6 +88,7 @@ function planContext({ profile, plan, kind }: PlanChatInput) {
     },
     movement: {
       sessionCount: plan.movement.sessionCount,
+      weekdays: plan.movement.weekdays ?? null,
       totalMinutes: plan.movement.totalMinutes,
       environmentLabel: plan.movement.environmentLabel,
       weather: plan.movement.weather ?? null,
@@ -198,14 +199,15 @@ async function askChatModel(input: PlanChatInput, lastUser: string): Promise<Pla
         if (accepted) {
           return { accepted: false, reason: "本次已经应用过一次调整，忽略重复调用。" };
         }
-        const result = validateRevisionDirective(raw, input.profile, input.plan);
+        const result = validateRevisionDirective(raw, input.profile, input.plan, lastUser);
         if (!result.ok) return { accepted: false, reason: result.reason };
         accepted = result.directive;
         return {
           accepted: true,
           summary: result.directive.summary,
           notes: result.directive.notes,
-          note: "系统会基于这个调整生成下一版计划；请在回复里简短告诉用户改了什么。",
+          weekdays: result.directive.movement?.weekdays ?? null,
+          note: "系统会基于这个调整生成下一版计划；请在回复里简短告诉用户改了什么，且只描述工具返回的实际训练日，不要补充未返回的时长或动作。",
         };
       },
     }),

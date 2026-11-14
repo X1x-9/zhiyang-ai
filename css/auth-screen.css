@@ -8,7 +8,7 @@
   overflow-x: hidden;
   background:
     linear-gradient(180deg, rgba(252, 253, 247, 0.1) 0%, rgba(238, 244, 232, 0.02) 42%, rgba(20, 36, 25, 0.26) 100%),
-    url("/images/auth-table.webp") center 46% / cover no-repeat,
+    url("/images/auth/auth-table.webp") center 46% / cover no-repeat,
     #dfe6db;
   isolation: isolate;
 }

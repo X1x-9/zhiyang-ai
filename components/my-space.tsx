@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion, useSpring } from "framer-motion";
 import {
   ArrowDown,
@@ -16,7 +16,8 @@ import {
 import { GrowingLoader, Reveal } from "@/components/experience";
 import { GlitchButton } from "@/components/glitch-button";
 import HeroAccordion from "@/components/hero-accordion";
-import type { DashboardData } from "@/lib/dashboard";
+import { chinaTodayDateKey, getWeightEntries, type DashboardData } from "@/lib/dashboard";
+import type { PlanDocument } from "@/lib/plan-engine";
 import {
   activityOptions,
   buildSpacePlans,
@@ -46,11 +47,11 @@ import { useHealthStore } from "@/stores/health-store";
 const ease = [0.22, 1, 0.36, 1] as const;
 
 const heroGalleryItems = [
-  { image: "/images/plan-exercise-hero.webp", alt: "" },
-  { image: "/images/hero-accordion-water.webp", alt: "" },
-  { image: "/images/zhiyang-hero-garden.webp", alt: "" },
-  { image: "/images/plan-diet-hero.webp", alt: "" },
-  { image: "/images/hero-accordion-canopy.webp", alt: "" },
+  { image: "/images/plans/plan-exercise-hero.webp", alt: "" },
+  { image: "/images/hero/hero-accordion-water.webp", alt: "" },
+  { image: "/images/hero/zhiyang-hero-garden.webp", alt: "" },
+  { image: "/images/plans/plan-diet-hero.webp", alt: "" },
+  { image: "/images/hero/hero-accordion-canopy.webp", alt: "" },
 ];
 
 const genderOptions: Array<{ value: SpaceGender; label: string }> = [
@@ -218,6 +219,29 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
   const [clearing, setClearing] = React.useState(false);
   const [confirmingClear, setConfirmingClear] = React.useState(false);
   const [clearedGuard, setClearedGuard] = React.useState(false);
+  const [weightInput, setWeightInput] = React.useState("");
+  const [weightBase, setWeightBase] = React.useState("");
+  const [weightDirty, setWeightDirty] = React.useState(false);
+  const [weightSaving, setWeightSaving] = React.useState(false);
+  const [weightMessage, setWeightMessage] = React.useState<{ kind: "idle" | "saving" | "ok" | "error"; text: string }>({
+    kind: "idle",
+    text: "",
+  });
+  const weightInputRef = React.useRef<HTMLInputElement>(null);
+  const weightEntriesQuery = useQuery({ queryKey: ["weight"], queryFn: getWeightEntries });
+  const planQuery = useQuery({
+    queryKey: ["plan"],
+    queryFn: async () => {
+      const response = await fetch("/api/plans/latest");
+      if (!response.ok) return null;
+      const data = (await response.json().catch(() => null)) as { plan?: PlanDocument | null } | null;
+      return data?.plan ?? null;
+    },
+    enabled: hasStored,
+  });
+  const todayKey = chinaTodayDateKey();
+  const todayWeightEntry = weightEntriesQuery.data?.entries.find((entry) => entry.dateKey === todayKey) ?? null;
+  const todayWeightNote = todayWeightEntry?.note ?? "";
 
   if (profile !== draftBase) {
     setDraftBase(profile);
@@ -256,15 +280,37 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
   };
 
   const latestWeight = data?.weightKg ?? null;
-  const weightFromProfile = data?.weightSource === "profile";
-  const syncedWeightKg = latestWeight !== null ? latestWeight.toFixed(1) : draft.weightKg;
+  const syncedWeightKg = weightDirty
+    ? weightInput
+    : latestWeight !== null ? latestWeight.toFixed(1) : draft.weightKg;
   const syncedDraft: SpaceProfile = { ...draft, weightKg: syncedWeightKg };
   const displayWeight = latestWeight !== null
     ? latestWeight.toFixed(1)
     : syncedWeightKg.trim() && Number.isFinite(Number(syncedWeightKg)) ? Number(syncedWeightKg).toFixed(1) : "";
 
+  if (weightBase !== displayWeight) {
+    setWeightBase(displayWeight);
+    if (!weightDirty) setWeightInput(displayWeight);
+  }
+  if (weightDirty && latestWeight !== null && weightInput.trim()
+    && Number.isFinite(Number(weightInput)) && Math.abs(Number(weightInput) - latestWeight) < 0.05) {
+    setWeightDirty(false);
+  }
+  const weightError = errors.weightKg ?? (weightMessage.kind === "error" ? weightMessage.text : "");
+
   const completeness = spaceCompleteness(syncedDraft);
   const plans = buildSpacePlans(syncedDraft);
+  const generatedPlan = planQuery.data ?? null;
+  const dietView = generatedPlan && generatedPlan.diet.meals.length > 0 ? generatedPlan.diet : plans.diet;
+  const movementView = generatedPlan ? generatedPlan.movement : plans.movement;
+  const dietLabelView = generatedPlan?.profileSnapshot?.dietLabel ?? dietText(draft.diet);
+  const movementEnvironment = movementView.environmentLabel || equipmentText(draft.equipment);
+  const movementMinutes = [...new Set(movementView.sessions.map((session) => session.minutes))];
+  const sessionMinutesLabel = movementMinutes.length === 1
+    ? `${movementMinutes[0]} 分钟`
+    : movementMinutes.length > 1
+      ? `${Math.min(...movementMinutes)}–${Math.max(...movementMinutes)} 分钟`
+      : `${draft.minutes || "—"} 分钟`;
   const hasRhythm = hasRhythmChoices(syncedDraft);
   const goalLine = plans.goalLine;
   const isDemo = demo;
@@ -293,6 +339,55 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
     setStatus((current) => current.kind === "idle" ? current : { kind: "idle", text: "" });
   }
 
+  async function persistWeight(options: { force: boolean }): Promise<string | null> {
+    if (!options.force && !weightDirty) return syncedWeightKg.trim() || null;
+    if (weightSaving) return null;
+    const raw = weightInput.trim();
+    const value = Number(raw);
+    if (!raw || !Number.isFinite(value) || value < 35 || value > 200) {
+      setWeightMessage({ kind: "error", text: "体重需在 35–200 kg 之间。" });
+      return null;
+    }
+    const rounded = Math.round(value * 10) / 10;
+    setWeightSaving(true);
+    setWeightMessage({ kind: "saving", text: "正在保存并同步…" });
+    try {
+      const payload: { dateKey: string; kg: number; note?: string } = { dateKey: todayKey, kg: rounded };
+      if (weightEntriesQuery.data) payload.note = todayWeightNote;
+      const response = await fetch("/api/weight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => null)) as {
+        entry?: { kg?: number };
+        message?: string;
+      } | null;
+      if (!response.ok || !result?.entry || typeof result.entry.kg !== "number") {
+        throw new Error(result?.message ?? "体重没有保存成功，请稍后重试。");
+      }
+      const savedKg = Number(result.entry.kg);
+      const formatted = savedKg.toFixed(1);
+      setWeightInput(formatted);
+      setWeightDirty(true);
+      setDraft((current) => ({ ...current, weightKg: formatted }));
+      if (hasStored) {
+        const nextProfile = { ...profile, weightKg: formatted };
+        setDraftBase(nextProfile);
+        setSpaceProfile(nextProfile);
+      }
+      setWeightMessage({ kind: "ok", text: `已保存 ${formatted} kg，并同步到今日概览与每周复盘。` });
+      void queryClient.invalidateQueries({ queryKey: ["weight"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      return formatted;
+    } catch (error) {
+      setWeightMessage({ kind: "error", text: error instanceof Error ? error.message : "体重没有保存成功，请稍后重试。" });
+      return null;
+    } finally {
+      setWeightSaving(false);
+    }
+  }
+
   function goTo(ref: React.RefObject<HTMLElement | null>) {
     const node = ref.current;
     if (!node) return;
@@ -303,13 +398,20 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
 
   function fillDemo() {
     if (!demo || !data) return;
-    setDraft(createDemoSpaceProfile(data.displayName, data.weightKg));
+    const demoProfile = createDemoSpaceProfile(data.displayName, data.weightKg);
+    setDraft(demoProfile);
+    setWeightDirty(false);
+    setWeightInput(demoProfile.weightKg);
+    setWeightMessage({ kind: "idle", text: "" });
     setErrors({});
     setStatus({ kind: "idle", text: "已填入演示资料；修改后点击保存，才会进入你的资料。" });
   }
 
   function resetDraft() {
     setDraft(profile);
+    setWeightDirty(false);
+    setWeightInput(displayWeight);
+    setWeightMessage({ kind: "idle", text: "" });
     setErrors({});
     setStatus({ kind: "idle", text: hasStored ? "已恢复到上次保存的资料。" : "已恢复到初始内容。" });
   }
@@ -347,6 +449,9 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
       }
       setClearedGuard(true);
       setDraft(createEmptySpaceProfile());
+      setWeightDirty(false);
+      setWeightInput(displayWeight);
+      setWeightMessage({ kind: "idle", text: "" });
       setErrors({});
       setConfirmingClear(false);
       setStatus({
@@ -364,19 +469,28 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || clearing) return;
+    if (saving || clearing || weightSaving) return;
     const nextErrors = validateSpaceProfile(syncedDraft);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       setStatus({ kind: "error", text: "还有几项需要确认，已标在对应字段下面。" });
       return;
     }
+    let weightKg = syncedDraft.weightKg.trim();
+    if (weightDirty) {
+      const savedWeight = await persistWeight({ force: false });
+      if (!savedWeight) {
+        setStatus({ kind: "error", text: "体重没有保存成功，请先检查体重。" });
+        return;
+      }
+      weightKg = savedWeight;
+    }
     const saved: SpaceProfile = {
       ...syncedDraft,
       name: syncedDraft.name.trim(),
       age: syncedDraft.age.trim(),
       heightCm: syncedDraft.heightCm.trim(),
-      weightKg: syncedDraft.weightKg.trim(),
+      weightKg,
       targetWeightKg: syncedDraft.targetWeightKg.trim(),
       city: syncedDraft.city.trim(),
       avoid: syncedDraft.avoid.trim(),
@@ -405,6 +519,10 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
 
     setSpaceProfile(persisted);
     setDraft(persisted);
+    setWeightInput(persisted.weightKg);
+    setWeightDirty(false);
+    setWeightBase(persisted.weightKg.trim());
+    setWeightMessage({ kind: "idle", text: "" });
     setErrors({});
     void queryClient.invalidateQueries({ queryKey: ["profile"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -630,29 +748,61 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
               </Field>
 
               <div className="ms-field">
-                <label htmlFor="ms-weight">当前体重<small>kg · 随体重记录同步</small></label>
-                <div
-                  id="ms-weight"
-                  className={`ms-weight-sync${displayWeight ? "" : " is-empty"}`}
-                  aria-invalid={Boolean(errors.weightKg)}
-                  aria-describedby={errors.weightKg ? "ms-weight-error" : undefined}
-                  tabIndex={errors.weightKg ? -1 : undefined}
-                >
-                  <strong>{displayWeight ? `${displayWeight} kg` : "还没有记录"}</strong>
-                  <button type="button" className="ms-weight-sync-link" onClick={() => setPage("dashboard")}>
-                    {latestWeight !== null && !weightFromProfile ? "更新记录" : "去记录"} <ArrowRight size={12} aria-hidden="true" />
+                <label htmlFor="ms-weight">当前体重<small>kg · 保存后同步</small></label>
+                <div className={`ms-weight-sync${weightInput ? "" : " is-empty"}`}>
+                  <div className="ms-weight-field">
+                    <input
+                      ref={weightInputRef}
+                      id="ms-weight"
+                      className="ms-weight-input"
+                      type="number"
+                      inputMode="decimal"
+                      min={35}
+                      max={200}
+                      step="0.1"
+                      value={weightInput}
+                      placeholder="例如 65.0"
+                      aria-label="当前体重，单位千克"
+                      aria-invalid={Boolean(weightError)}
+                      aria-describedby="ms-weight-note"
+                      disabled={weightSaving || saving}
+                      onChange={(event) => {
+                        update("weightKg", event.target.value);
+                        setWeightInput(event.target.value);
+                        setWeightDirty(true);
+                        setWeightMessage({ kind: "idle", text: "" });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        void persistWeight({ force: true });
+                      }}
+                    />
+                    <span className="ms-weight-unit">kg</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ms-weight-sync-link"
+                    onClick={() => void persistWeight({ force: true })}
+                    disabled={weightSaving || saving || clearing}
+                  >
+                    {weightSaving ? "保存中…" : "保存"} {!weightSaving && <Check size={12} aria-hidden="true" />}
                   </button>
                 </div>
-                <p className="ms-weight-sync-note">
-                  {weightFromProfile
-                    ? "取自资料填写的体重，记录后会同步更新。"
-                    : latestWeight !== null
-                      ? "取自最新一笔体重记录。"
-                      : displayWeight
-                        ? "沿用资料里的体重，记录后会同步更新。"
-                        : "保存资料前，请先在今日概览记一笔体重。"}
+                <p
+                  id="ms-weight-note"
+                  className={`ms-weight-sync-note${weightError ? " is-error" : weightMessage.kind === "ok" ? " is-ok" : weightMessage.kind === "saving" ? " is-saving" : ""}`}
+                  role={weightError ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {weightError
+                    ? weightError
+                    : weightMessage.kind === "saving" || weightMessage.kind === "ok"
+                      ? weightMessage.text
+                      : todayWeightEntry
+                        ? "今天已有一笔记录，保存会更新今天的值，并同步到概览与复盘。"
+                        : "保存后会新增今天的一笔体重记录，并同步到今日概览与每周复盘。"}
                 </p>
-                {errors.weightKg && <p className="ms-error" id="ms-weight-error">{errors.weightKg}</p>}
               </div>
 
               <Field id="ms-target-weight" label="目标体重" hint="kg" error={errors.targetWeightKg}>
@@ -761,7 +911,7 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
                   {isDemo && <button type="button" className="ms-ghost-btn" onClick={fillDemo} disabled={clearing}>填入演示资料</button>}
                   <button type="button" className="ms-ghost-btn is-danger" onClick={beginClear} disabled={clearing || saving}>清空资料</button>
                   <button type="button" className="ms-ghost-btn" onClick={resetDraft}>撤销修改</button>
-                  <GlitchButton type="submit" disabled={saving || clearing}>{saving ? "正在生成计划…" : "保存并生成计划"} {!saving && <ArrowRight size={15} aria-hidden="true" />}</GlitchButton>
+                  <GlitchButton type="submit" disabled={saving || clearing || weightSaving}>{saving ? "正在生成计划…" : "保存并生成计划"} {!saving && <ArrowRight size={15} aria-hidden="true" />}</GlitchButton>
                 </>
               )}
             </div>
@@ -823,7 +973,10 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
         {hasRhythm ? (
           <>
             <header className="ms-plans-head">
-              <h2>饮食与运动，先各排一版。</h2>
+              <div className="ms-plans-title">
+                <h2>饮食与运动，先各排一版。</h2>
+                {generatedPlan && <span className="ms-plans-version">计划 v{generatedPlan.version}</span>}
+              </div>
             </header>
 
             <div className="ms-plans">
@@ -832,11 +985,11 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
               <div className="ms-plan-head">
                 <div>
                   <h3>一日四餐，留出替换的余地。</h3>
-                  <p>{dietText(draft.diet)} · {draft.budget.trim() ? `预算约 ¥${draft.budget.trim()}/天` : "未填写预算"}</p>
+                  <p>{dietLabelView} · {draft.budget.trim() ? `预算约 ¥${draft.budget.trim()}/天` : "未填写预算"}</p>
                 </div>
               </div>
               <ol className="ms-meals">
-                {plans.diet.meals.map((meal) => (
+                {dietView.meals.map((meal) => (
                   <li className="ms-meal" key={meal.time}>
                     <div className="ms-meal-when">
                       <b>{meal.time}</b>
@@ -851,8 +1004,8 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
                 ))}
               </ol>
               <div className="ms-plan-notes">
-                <p><CircleAlert size={13} aria-hidden="true" />{plans.diet.avoidNote}</p>
-                <p><Wallet size={13} aria-hidden="true" />{plans.diet.budgetNote}</p>
+                <p><CircleAlert size={13} aria-hidden="true" />{dietView.avoidNote}</p>
+                <p><Wallet size={13} aria-hidden="true" />{dietView.budgetNote}</p>
               </div>
               <div className="ms-plan-foot">
                 <button type="button" className="ms-plan-cta" onClick={() => setPage("plans")}>
@@ -869,17 +1022,17 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
                 <div>
                   <h3>一周几次，先排进日历。</h3>
                   <p>
-                    {equipmentText(draft.equipment)} · 每周 {plans.movement.sessionCount} 次 · 每次 {draft.minutes} 分钟
-                    · 共约 {plans.movement.totalMinutes} 分钟
+                    {movementEnvironment} · 每周 {movementView.sessionCount} 次 · 每次 {sessionMinutesLabel}
+                    · 共约 {movementView.totalMinutes} 分钟
                   </p>
                 </div>
               </div>
               <div
                 className="ms-week"
                 role="img"
-                aria-label={`每周安排：${plans.movement.sessions.map((session) => `${session.day}${session.title}${session.minutes}分钟`).join("，")}`}
+                aria-label={`每周安排：${movementView.sessions.map((session) => `${session.day}${session.title}${session.minutes}分钟`).join("，")}`}
               >
-                {plans.movement.week.map((day) => (
+                {movementView.week.map((day) => (
                   <div key={day.label} className={`ms-week-day ${day.session ? "has" : "rest"}`} aria-hidden="true">
                     <span>{day.short}</span>
                     <i />
@@ -888,7 +1041,7 @@ export function MySpace({ data, loading, profile, hasStored, demo }: MySpaceProp
                 ))}
               </div>
               <ul className="ms-sessions">
-                {plans.movement.sessions.map((session) => (
+                {movementView.sessions.map((session) => (
                   <li key={`${session.day}-${session.title}`}>
                     <span className="ms-session-day">{session.day}</span>
                     <div><strong>{session.title}</strong><p>{session.focus}</p></div>

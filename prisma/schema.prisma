@@ -45,6 +45,7 @@ model HealthProfile {
   planAdjustments PlanAdjustment[]
   feedback        Feedback[]
   weightRecords   WeightRecord[]
+  workoutRecords  WorkoutRecord[]
 }
 
 model MealRecord {
@@ -121,6 +122,23 @@ model WeightRecord {
   profile   HealthProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, dateKey])
+  @@index([profileId, dateKey])
+}
+
+model WorkoutRecord {
+  id          String        @id @default(cuid())
+  profileId   String
+  dateKey     String        @db.VarChar(10)
+  sessionKey  String        @db.VarChar(191)
+  title       String        @db.VarChar(120)
+  minutes     Int
+  steps       Json
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  profile     HealthProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, dateKey, sessionKey])
   @@index([profileId, dateKey])
 }
 

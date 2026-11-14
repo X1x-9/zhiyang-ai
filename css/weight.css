@@ -410,7 +410,7 @@
 
 @keyframes weightSpin { to { transform: rotate(360deg); } }
 
-/* MySpace read-only weight sync */
+/* MySpace editable weight sync */
 
 .ms-weight-sync {
   display: flex;
@@ -426,10 +426,52 @@
   transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
 }
 
-.ms-weight-sync strong { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ms-weight-sync.is-empty strong { color: #8b968c; font-size: 12px; font-weight: 600; }
-.ms-weight-sync[aria-invalid="true"] { border-color: #b4543f; background: #fff8f2; }
-.ms-weight-sync:focus { outline: none; box-shadow: 0 0 0 3px rgba(111, 146, 114, .18); }
+.ms-weight-field {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ms-weight-input {
+  width: 100%;
+  max-width: 120px;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #22352a;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-weight-input::placeholder { color: #8b968c; font-size: 12px; font-weight: 600; }
+.ms-weight-input:disabled { color: #8b968c; cursor: wait; }
+.ms-weight-sync .ms-weight-input:focus,
+.ms-weight-sync .ms-weight-input:focus-visible {
+  outline: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ms-weight-input::-webkit-outer-spin-button,
+.ms-weight-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ms-weight-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+.ms-weight-unit { color: #6f7f72; font-size: 11px; font-weight: 700; }
+
+.ms-weight-sync:focus-within {
+  border-color: #b9cdb4;
+  box-shadow: 0 0 0 3px rgba(111, 146, 114, .13);
+}
+.ms-weight-sync:has(.ms-weight-input[aria-invalid="true"]) {
+  border-color: #b4543f;
+  background: #fff8f2;
+}
 
 .ms-weight-sync-link {
   display: inline-flex;
@@ -447,7 +489,11 @@
 }
 
 .ms-weight-sync-link:hover { background: #e9f1e5; border-color: #c6d8c0; }
+.ms-weight-sync-link:disabled { opacity: .55; cursor: wait; }
 .ms-weight-sync-note { margin: 0; color: #8b968c; font-size: 9.5px; line-height: 1.5; }
+.ms-weight-sync-note.is-ok { color: #4f7657; }
+.ms-weight-sync-note.is-error { color: #a4573f; }
+.ms-weight-sync-note.is-saving { color: #7e8b81; }
 
 @media (max-width: 1100px) {
   .weight-review-body { grid-template-columns: minmax(0, 1fr); gap: 14px; }

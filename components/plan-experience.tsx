@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -32,10 +33,18 @@ import {
 import { FoodGuide } from "@/components/food-guide";
 import { Reveal } from "@/components/experience";
 import { GlitchButton } from "@/components/glitch-button";
-import type { DashboardData } from "@/lib/dashboard";
+import { chinaWeekDates, type DashboardData } from "@/lib/dashboard";
 import type { DynamicPlanAdjustment } from "@/lib/plan-adjustment";
 import type { PlanDocument, PlanVersionSummary } from "@/lib/plan-engine";
 import { createEmptySpaceProfile, dietLabels, spaceCompleteness, type SpaceProfile, type SpaceSession } from "@/lib/space";
+import {
+  getWorkoutWeek,
+  isWorkoutComplete,
+  saveWorkoutSteps,
+  type WorkoutRecord,
+  type WorkoutStepInput,
+  type WorkoutWeekResponse,
+} from "@/lib/workout";
 import { useHealthStore } from "@/stores/health-store";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -247,6 +256,7 @@ type PlanStateResponse = {
 };
 
 function useGeneratedPlan(hasStored: boolean): PlanState {
+  const queryClient = useQueryClient();
   const [plan, setPlan] = React.useState<PlanDocument | null>(null);
   const [activePlan, setActivePlan] = React.useState<PlanDocument | null>(null);
   const [activeVersion, setActiveVersion] = React.useState<number | null>(null);
@@ -321,6 +331,7 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
       const data = (await response.json().catch(() => null)) as PlanStateResponse | null;
       if (!response.ok || !data?.plan) throw new Error(data?.message ?? "计划生成失败，请稍后重试。");
       applyState(data);
+      void queryClient.invalidateQueries({ queryKey: ["plan"] });
       return {
         ok: true,
         version: data.generatedVersion ?? data.plan.version,
@@ -333,7 +344,7 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
     } finally {
       setLoading(false);
     }
-  }, [activating, applyState, chatting, deleting, hasStored, loading]);
+  }, [activating, applyState, chatting, deleting, hasStored, loading, queryClient]);
 
   const chat = React.useCallback(async (messages: Array<{ role: "user" | "assistant"; content: string }>, kind: PlanKind): Promise<PlanChatReply> => {
     if (!hasStored || loading || chatting || activating !== null || deleting) {
@@ -348,7 +359,10 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
       });
       const data = (await response.json().catch(() => null)) as PlanStateResponse | null;
       if (!response.ok || !data?.reply) throw new Error(data?.message ?? "暂时没能回答，请稍后再试。");
-      if (data.plan) applyState(data);
+      if (data.plan) {
+        applyState(data);
+        void queryClient.invalidateQueries({ queryKey: ["plan"] });
+      }
       return {
         ok: true,
         reply: data.reply,
@@ -361,7 +375,7 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
     } finally {
       setChatting(false);
     }
-  }, [activating, applyState, chatting, deleting, hasStored, loading]);
+  }, [activating, applyState, chatting, deleting, hasStored, loading, queryClient]);
 
   const activate = React.useCallback(async (version: number) => {
     if (!hasStored || activating !== null || loading || chatting || deleting) return;
@@ -376,12 +390,13 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
       const data = (await response.json().catch(() => null)) as PlanStateResponse | null;
       if (!response.ok || !data) throw new Error(data?.message ?? "这个版本暂时无法启用，请稍后重试。");
       applyState(data);
+      void queryClient.invalidateQueries({ queryKey: ["plan"] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "这个版本暂时无法启用，请稍后重试。");
     } finally {
       setActivating(null);
     }
-  }, [activating, applyState, chatting, deleting, hasStored, loading]);
+  }, [activating, applyState, chatting, deleting, hasStored, loading, queryClient]);
 
   const remove = React.useCallback(async (versions: number[]): Promise<PlanDeleteOutcome> => {
     if (!hasStored || deleting || loading || chatting || activating !== null) {
@@ -400,6 +415,7 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
       const data = (await response.json().catch(() => null)) as PlanStateResponse | null;
       if (!response.ok || !data) throw new Error(data?.message ?? "删除失败，请稍后重试。");
       applyState(data);
+      void queryClient.invalidateQueries({ queryKey: ["plan"] });
       return {
         ok: true,
         deletedCount: typeof data.deletedCount === "number" ? data.deletedCount : versions.length,
@@ -409,7 +425,7 @@ function useGeneratedPlan(hasStored: boolean): PlanState {
     } finally {
       setDeleting(false);
     }
-  }, [activating, applyState, chatting, deleting, hasStored, loading]);
+  }, [activating, applyState, chatting, deleting, hasStored, loading, queryClient]);
 
   const restoreAdjustment = React.useCallback(async () => {
     if (!hasStored || restoringAdjustment) return;
@@ -733,7 +749,7 @@ function PlanHero({ kind, data, plan, hasStored }: { kind: PlanKind; data?: Dash
     <section className={`pp-hero pp-hero-${kind}`} aria-labelledby={`pp-${kind}-title`}>
       <div className="pp-hero-media">
         <Image
-          src={diet ? "/images/plan-diet-hero.webp" : "/images/plan-exercise-hero.webp"}
+          src={diet ? "/images/plans/plan-diet-hero.webp" : "/images/plans/plan-exercise-hero.webp"}
           alt={diet ? "木质餐桌上摆放着燕麦鸡蛋碗、酸奶、牛油果和蔬菜的早餐" : "清晨湖畔的木栈道上，一名男子正在做弓步拉伸"}
           fill
           sizes="(max-width: 800px) 100vw, 1150px"
@@ -951,6 +967,45 @@ const sessionToneLabels: Record<SpaceSession["tone"], string> = {
   mobility: "恢复",
 };
 
+const daybookIconPaths = {
+  dumbbell: "M20.57 14.86 22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14 4.14 5.57 2 7.71 3.43 9.14 2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22 14.86 20.57 16.29 22 18.43 19.86 19.86 21.29 21.29 19.86 19.86 18.43 22 16.29 20.57 14.86Z",
+  barbell: "M7.75 16.5C7.75 16.914 7.414 17.25 7 17.25H5.5C4.257 17.25 3.25 16.243 3.25 15V12.75H2.75C2.336 12.75 2 12.414 2 12C2 11.586 2.336 11.25 2.75 11.25H3.25V9C3.25 7.757 4.257 6.75 5.5 6.75H7C7.414 6.75 7.75 7.086 7.75 7.5V11.25H16.25V7.5C16.25 7.086 16.586 6.75 17 6.75H18.5C19.743 6.75 20.75 7.757 20.75 9V11.25H21.25C21.664 11.25 22 11.586 22 12C22 12.414 21.664 12.75 21.25 12.75H20.75V15C20.75 16.243 19.743 17.25 18.5 17.25H17C16.586 17.25 16.25 16.914 16.25 16.5V12.75H7.75V16.5ZM19.25 9C19.25 8.586 18.914 8.25 18.5 8.25H17.75V15.75H18.5C18.914 15.75 19.25 15.414 19.25 15V9ZM4.75 15C4.75 15.414 5.086 15.75 5.5 15.75H6.25V8.25H5.5C5.086 8.25 4.75 8.586 4.75 9V15Z",
+  bat: "M20 2C19.72 2 19.5 2.11 19.29 2.29L9.79 11.79C9.75 11.83 9.72 11.87 7.23 15.35L4 18.59L3.71 18.29C3.5 18.1 3.26 18 3 18C2.44 18 2 18.44 2 19C2 19.26 2.1 19.5 2.29 19.71L4.29 21.71C4.68 22.11 5.31 22.12 5.71 21.74C6.11 21.35 6.12 20.72 5.71 20.29L5.41 20L8.64 16.77L12.21 14.21L21.71 4.71C22.1 4.32 22.1 3.68 21.71 3.29L20.71 2.29C20.5 2.1 20.26 2 20 2M18.5 13A2.5 2.5 0 0 0 16 15.5A2.5 2.5 0 0 0 18.5 18A2.5 2.5 0 0 0 21 15.5A2.5 2.5 0 0 0 18.5 13Z",
+  hiking: "M17.47 8.67H19V23H17.47V12.6C16.67 12.44 15.92 12.14 15.21 11.71S13.9 10.78 13.39 10.2L12.77 13.27 15 15.47V23H13V17L10.76 14.8 8.89 23H6.73C6.73 23 9.86 7.22 9.89 7.09 10 6.61 10.22 6.24 10.59 6 10.96 5.73 11.33 5.6 11.71 5.6 12.1 5.6 12.46 5.69 12.79 5.87 13.13 6.04 13.39 6.29 13.58 6.61L14.64 8.24C14.93 8.78 15.32 9.25 15.81 9.63S16.86 10.3 17.47 10.5V8.67M8.55 5.89 7.4 5.65C6.83 5.5 6.31 5.62 5.84 5.94 5.38 6.26 5.1 6.7 5 7.28L4.19 11.26C4.16 11.55 4.22 11.81 4.38 12.05 4.54 12.29 4.75 12.42 5 12.46L7.21 12.89 8.55 5.89M13 1C11.9 1 11 1.9 11 3S11.9 5 13 5 15 4.11 15 3 14.11 1 13 1Z",
+  run: "M16.5 5.5A2 2 0 0 0 18.5 3.5A2 2 0 0 0 16.5 1.5A2 2 0 0 0 14.5 3.5A2 2 0 0 0 16.5 5.5M12.9 19.4 13.9 15 16 17V23H18V15.5L15.9 13.5 16.5 10.5C17.89 12.09 19.89 13 22 13V11C20.24 11.03 18.6 10.11 17.7 8.6L16.7 7C16.34 6.4 15.7 6 15 6 14.7 6 14.5 6.1 14.2 6.1L9 8.3V13H11V9.6L12.8 8.9 11.2 17 6.3 16 5.9 18 12.9 19.4M4 9A1 1 0 0 1 3 8A1 1 0 0 1 4 7H7V9H4M5 5A1 1 0 0 1 4 4A1 1 0 0 1 5 3H10V5H5M3 13A1 1 0 0 1 2 12A1 1 0 0 1 3 11H7V13H3Z",
+} as const;
+
+function DaybookGlyph({ title, tone }: { title?: string; tone?: SpaceSession["tone"] }) {
+  if (title?.includes("室内有氧")) {
+    return (
+      <svg className="is-line is-detail" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <rect x="4" y="5" width="40" height="28" rx="2" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M31 22V15H17V22M18 39H30M17 33H31M32 27 30 39 31 43M16 27 18 39 17 43M24 27V43M34 27H14" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (title?.includes("活动度")) {
+    return (
+      <svg className="is-line" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="6" cy="9" r="2" stroke="currentColor" strokeWidth="2" />
+        <path d="M6 11v2M22 2 12.7 16.1c-.4.6-1 .9-1.7.9H4a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h2c1.6 0 3.1-.7 4.1-2.1l2.6-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  const path = title?.includes("杠铃")
+    ? daybookIconPaths.bat
+    : title?.includes("哑铃上下肢")
+      ? daybookIconPaths.barbell
+      : title?.includes("哑铃") || tone === "strength"
+        ? daybookIconPaths.dumbbell
+        : title?.includes("走") || tone === "cardio"
+          ? daybookIconPaths.run
+          : title?.includes("散步") || !title
+            ? daybookIconPaths.hiking
+            : daybookIconPaths.hiking;
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={path} fill="currentColor" /></svg>;
+}
+
 function GeneratedMovement({ plan }: { plan: PlanDocument }) {
   const [openDay, setOpenDay] = React.useState<string | null>(null);
   const toggleDay = (label: string) => setOpenDay((current) => current === label ? null : label);
@@ -989,6 +1044,7 @@ function GeneratedMovement({ plan }: { plan: PlanDocument }) {
               }}
             >
               <div className="pp-daybook-page">
+                <span className="pp-daybook-icon"><DaybookGlyph title={session?.title} tone={session?.tone} /></span>
                 <span className="pp-daybook-day">{day.label}</span>
                 <strong>{session?.title ?? "休息 / 散步"}</strong>
                 {session ? (
@@ -1001,6 +1057,7 @@ function GeneratedMovement({ plan }: { plan: PlanDocument }) {
                 <small>{session ? `${sessionToneLabels[session.tone]} · ${session.minutes} 分钟` : "恢复日"}</small>
               </div>
               <div className="pp-daybook-cover" aria-hidden="true">
+                <span className="pp-daybook-icon"><DaybookGlyph title={session?.title} tone={session?.tone} /></span>
                 <span className="pp-daybook-day">{day.label}</span>
                 <strong>{session?.title ?? "休息 / 散步"}</strong>
                 <div className="pp-daybook-foot">
@@ -1878,6 +1935,64 @@ function planCards(plan: PlanDocument): SessionCard[] {
   });
 }
 
+function upsertWorkoutRecord(current: WorkoutWeekResponse, record: WorkoutRecord): WorkoutWeekResponse {
+  const exists = current.records.some(
+    (item) => item.dateKey === record.dateKey && item.sessionKey === record.sessionKey,
+  );
+  return {
+    ...current,
+    records: exists
+      ? current.records.map((item) =>
+          item.dateKey === record.dateKey && item.sessionKey === record.sessionKey ? record : item,
+        )
+      : [...current.records, record],
+  };
+}
+
+function useWorkoutChecks(enabled: boolean) {
+  const queryClient = useQueryClient();
+  const [savingKey, setSavingKey] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const query = useQuery({
+    queryKey: ["workouts"],
+    queryFn: getWorkoutWeek,
+    enabled,
+    staleTime: 15_000,
+  });
+
+  const toggleStep = React.useCallback(async (input: WorkoutStepInput) => {
+    if (!enabled) return;
+    const previous = queryClient.getQueryData<WorkoutWeekResponse>(["workouts"]);
+    const optimistic: WorkoutRecord = {
+      dateKey: input.dateKey,
+      sessionKey: input.sessionKey,
+      title: input.title,
+      minutes: input.minutes,
+      steps: [...input.steps],
+      completedAt: isWorkoutComplete(input.steps) ? new Date().toISOString() : null,
+    };
+    setSavingKey(input.sessionKey);
+    setError(null);
+    queryClient.setQueryData<WorkoutWeekResponse>(["workouts"], (current) =>
+      current ? upsertWorkoutRecord(current, optimistic) : current,
+    );
+    try {
+      const result = await saveWorkoutSteps(input);
+      queryClient.setQueryData<WorkoutWeekResponse>(["workouts"], (current) =>
+        current ? upsertWorkoutRecord(current, result.record) : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    } catch (err) {
+      if (previous) queryClient.setQueryData(["workouts"], previous);
+      setError(err instanceof Error ? err.message : "完成状态没有保存成功，请稍后重试。");
+    } finally {
+      setSavingKey(null);
+    }
+  }, [enabled, queryClient]);
+
+  return { records: query.data?.records ?? [], ready: query.isSuccess, savingKey, error, toggleStep };
+}
+
 function SessionDeck({ plan }: { plan: PlanDocument | null }) {
   const usingPlan = Boolean(plan && plan.movement.sessions.length > 0);
   const cards = React.useMemo(() => (usingPlan && plan ? planCards(plan) : sampleCards()), [usingPlan, plan]);
@@ -1890,6 +2005,36 @@ function SessionDeck({ plan }: { plan: PlanDocument | null }) {
   const title = usingPlan
     ? minutes.length === 1 ? `一次 ${minutes[0]} 分钟，怎么排。` : "一次训练，怎么排。"
     : "一次 25 分钟，怎么排。";
+  const weekDates = React.useMemo(() => chinaWeekDates(), []);
+  const checks = useWorkoutChecks(usingPlan);
+  const recordFor = React.useCallback((card: SessionCard) => {
+    const date = weekDates.find((day) => day.label === card.day) ?? null;
+    const record = date
+      ? checks.records.find((item) => item.dateKey === date.key && item.sessionKey === card.id) ?? null
+      : null;
+    return { date, record };
+  }, [checks.records, weekDates]);
+  const activeState = recordFor(session);
+  const checkedSteps = React.useMemo(
+    () => session.steps.map((_, stepIndex) => Boolean(activeState.record?.steps[stepIndex])),
+    [activeState.record, session.steps],
+  );
+  const doneCount = checkedSteps.filter(Boolean).length;
+  const complete = doneCount === session.steps.length;
+  const saving = checks.savingKey === session.id;
+  const canToggle = usingPlan && checks.ready && activeState.date !== null && !activeState.date.isFuture;
+
+  function onToggleStep(stepIndex: number, checked: boolean) {
+    if (!canToggle || saving || !activeState.date) return;
+    const nextSteps = checkedSteps.map((value, index) => (index === stepIndex ? checked : value));
+    void checks.toggleStep({
+      dateKey: activeState.date.key,
+      sessionKey: session.id,
+      title: session.title,
+      minutes: session.minutes,
+      steps: nextSteps,
+    });
+  }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowLeft") return;
@@ -1909,34 +2054,53 @@ function SessionDeck({ plan }: { plan: PlanDocument | null }) {
         />
         <div className="pp-deck">
           <div className="pp-deck-tabs" role="tablist" aria-label={usingPlan ? "当前计划的训练课" : "示例训练课"} aria-orientation="vertical" onKeyDown={onKeyDown}>
-            {cards.map((item, itemIndex) => (
-              <button
-                type="button"
-                key={item.id}
-                ref={(element) => { tabsRef.current[itemIndex] = element; }}
-                role="tab"
-                id={`pp-session-tab-${itemIndex}`}
-                aria-selected={itemIndex === index}
-                aria-controls={`pp-session-panel-${itemIndex}`}
-                tabIndex={itemIndex === index ? 0 : -1}
-                className={`pp-session-tab ${itemIndex === index ? "active" : ""}`}
-                onClick={() => setActive(itemIndex)}
-              >
-                {itemIndex === index && (
-                  <motion.span
-                    layoutId="pp-session-glider"
-                    className={`pp-session-glider tone-${item.tone}`}
-                    transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 26, mass: 0.9 }}
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="pp-session-tab-inner">
-                  <span className="pp-session-day">{item.day} · {item.tag}</span>
-                  <strong>{item.title}</strong>
-                  <small>{item.subtitle} · {item.minutes} 分钟</small>
-                </span>
-              </button>
-            ))}
+            {cards.map((item, itemIndex) => {
+              const tabState = recordFor(item);
+              const tabDone = item.steps.reduce(
+                (count, _step, stepIndex) => count + (tabState.record?.steps[stepIndex] ? 1 : 0),
+                0,
+              );
+              const tabComplete = tabDone === item.steps.length;
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  ref={(element) => { tabsRef.current[itemIndex] = element; }}
+                  role="tab"
+                  id={`pp-session-tab-${itemIndex}`}
+                  aria-selected={itemIndex === index}
+                  aria-controls={`pp-session-panel-${itemIndex}`}
+                  tabIndex={itemIndex === index ? 0 : -1}
+                  className={`pp-session-tab ${itemIndex === index ? "active" : ""}`}
+                  onClick={() => setActive(itemIndex)}
+                >
+                  {itemIndex === index && (
+                    <motion.span
+                      layoutId="pp-session-glider"
+                      className={`pp-session-glider tone-${item.tone}`}
+                      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 26, mass: 0.9 }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="pp-session-tab-inner">
+                    <span className="pp-session-day">
+                      <span>{item.day} · {item.tag}</span>
+                      {usingPlan && tabState.date && (checks.ready || tabState.date.isFuture) && (
+                        <span className={`pp-session-state${tabComplete ? " is-complete" : ""}${tabState.date.isFuture ? " is-future" : ""}`}>
+                          {tabState.date.isFuture
+                            ? "未到"
+                            : tabComplete
+                              ? <><Check size={9} aria-hidden="true" />已完成</>
+                              : `${tabDone}/${item.steps.length}`}
+                        </span>
+                      )}
+                    </span>
+                    <strong>{item.title}</strong>
+                    <small>{item.subtitle} · {item.minutes} 分钟</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <div
             className="pp-session-panel"
@@ -1961,12 +2125,43 @@ function SessionDeck({ plan }: { plan: PlanDocument | null }) {
                 <p className="pp-session-focus">{session.focus}</p>
                 <ol className="pp-steps">
                   {session.steps.map((step, stepIndex) => (
-                    <li key={step.label}>
+                    <li key={step.label} className={checkedSteps[stepIndex] ? "is-done" : ""}>
                       <span className="pp-step-num" aria-hidden="true">{String(stepIndex + 1).padStart(2, "0")}</span>
                       <div><strong>{step.label} · {step.minutes} 分钟</strong><p>{step.text}</p></div>
+                      {usingPlan && activeState.date && (
+                        <label
+                          className="pp-step-check"
+                          title={activeState.date.isFuture ? "还没到这一天，先不用打卡。" : `标记「${step.label}」完成`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={Boolean(checkedSteps[stepIndex])}
+                            disabled={!canToggle}
+                            onChange={(event) => onToggleStep(stepIndex, event.target.checked)}
+                            aria-label={`${session.title} · ${step.label} 完成`}
+                          />
+                          <svg viewBox="0 0 32 32" aria-hidden="true">
+                            <circle className="pp-check-ring" cx="16" cy="16" r="13" />
+                            <path className="pp-check-mark" d="M9.6 16.4l4.1 4.1 8.8-9.2" />
+                          </svg>
+                        </label>
+                      )}
                     </li>
                   ))}
                 </ol>
+                {usingPlan && activeState.date && (
+                  <div
+                    className={`pp-session-check-state${complete ? " is-complete" : ""}${activeState.date.isFuture ? " is-future" : ""}`}
+                    aria-live="polite"
+                  >
+                    {activeState.date.isFuture
+                      ? <><Clock3 size={12} aria-hidden="true" />还没到这一天，先看看安排。</>
+                      : complete
+                        ? <><Check size={13} aria-hidden="true" />这次训练已完成，已记入本周复盘。</>
+                        : <><span className="pp-check-count">{doneCount}/{session.steps.length}</span>项完成 · 全部完成后记作一次训练</>}
+                  </div>
+                )}
+                {usingPlan && checks.error && <p className="pp-session-check-error" role="alert">{checks.error}</p>}
                 <div className="pp-easier"><Wind size={15} aria-hidden="true" /><p><strong>状态一般时</strong>{session.easier}</p></div>
               </motion.div>
             </AnimatePresence>

@@ -1170,6 +1170,13 @@
   max-width: 760px;
 }
 
+.ms-plans-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .ms-plans-head h2 {
   margin: 0;
   font-family: var(--ms-serif);
@@ -1177,6 +1184,16 @@
   font-weight: 600;
   letter-spacing: -.02em;
   color: #2b4233;
+}
+
+.ms-plans-version {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e9f0e9;
+  color: #5f8066;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .02em;
 }
 
 .ms-plans-head p {

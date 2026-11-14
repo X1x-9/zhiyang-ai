@@ -87,6 +87,35 @@ export function chinaTodayDateKey(date = new Date()) {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+export type ChinaWeekDate = {
+  key: string;
+  label: string;
+  dateLabel: string;
+  isToday: boolean;
+  isFuture: boolean;
+};
+
+const weekdayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"] as const;
+const weekdayShortLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+export function chinaWeekDates(now = new Date()): ChinaWeekDate[] {
+  const todayKey = chinaTodayDateKey(now);
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Shanghai", weekday: "short" }).format(now);
+  const todayIndex = Math.max(0, weekdayShortLabels.indexOf(weekday as (typeof weekdayShortLabels)[number]));
+  const base = new Date(`${todayKey}T12:00:00+08:00`);
+  return weekdayLabels.map((label, index) => {
+    const key = chinaTodayDateKey(new Date(base.getTime() + (index - todayIndex) * 86_400_000));
+    const [, month, day] = key.split("-");
+    return {
+      key,
+      label,
+      dateLabel: `${Number(month)}/${Number(day)}`,
+      isToday: key === todayKey,
+      isFuture: key > todayKey,
+    };
+  });
+}
+
 export function weightDateLabel(dateKey: string) {
   const [, month, day] = dateKey.split("-");
   return `${Number(month)}/${Number(day)}`;

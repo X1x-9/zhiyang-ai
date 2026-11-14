@@ -3,6 +3,7 @@ import { readDemoProfile } from "./demo-session";
 import { matchFood, scaleNutrition } from "./food-data";
 import { DEMO_NUTRITION_TARGETS, deriveNutritionTargets, roundMacro } from "./nutrition-goal";
 import { readProfileWeightKg } from "./space";
+import type { WorkoutRecord } from "./workout";
 
 export type DemoMealType = "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
 export type DemoMealStatus = "PENDING" | "CONFIRMED" | "REJECTED";
@@ -174,7 +175,11 @@ function enrichItem(item: DemoMealItem): DemoMealItem {
   };
 }
 
-export function createDemoDashboard(sessionId: string, notice?: string): DashboardData {
+export function createDemoDashboard(
+  sessionId: string,
+  notice?: string,
+  workoutRecords: WorkoutRecord[] = [],
+): DashboardData {
   const weights = listDemoWeightEntries(sessionId);
   const latestWeight = weights[0] ?? null;
   const previousWeight = weights[1] ?? null;
@@ -201,7 +206,15 @@ export function createDemoDashboard(sessionId: string, notice?: string): Dashboa
         partial: macroMeals.length < todayMeals.length,
       }
     : null;
-  const weekDays = buildDemoWeekDays(todayMeals.length, calories);
+  const completedMinutes = new Map<string, number>();
+  for (const record of workoutRecords) {
+    if (!record.completedAt) continue;
+    completedMinutes.set(record.dateKey, (completedMinutes.get(record.dateKey) ?? 0) + record.minutes);
+  }
+  const weekDays = buildDemoWeekDays(todayMeals.length, calories).map((day) => {
+    const minutes = completedMinutes.get(day.key);
+    return minutes ? { ...day, workoutMinutes: minutes } : day;
+  });
   const demoWaterValues = [1620, 1840, 1380, 1760, 1520, 2050, 1690];
   const waterHistory: Record<string, number> = {};
   weekDays.forEach((day, index) => {
@@ -466,7 +479,7 @@ export function upsertDemoWeightEntry(
   const existing = entries.find((entry) => entry.dateKey === input.dateKey);
   if (existing) {
     existing.kg = input.kg;
-    existing.note = input.note ?? "";
+    if (input.note !== undefined) existing.note = input.note;
     return existing;
   }
   const entry: WeightEntry = {

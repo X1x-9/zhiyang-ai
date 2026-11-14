@@ -537,9 +537,11 @@ function outdoorWeatherRisk(day: MovementWeatherDay): string | null {
 export function buildMovementPlan(
   profile: SpaceProfile,
   weather?: MovementWeatherForecast | null,
+  weekdays?: number[] | null,
 ): {
   sessions: SpaceSession[];
   week: Array<{ label: string; short: string; session: SpaceSession | null }>;
+  weekdays: number[];
   sessionCount: number;
   totalMinutes: number;
   environmentLabel: string;
@@ -550,6 +552,7 @@ export function buildMovementPlan(
     return {
       sessions: [],
       week: weekLabels.map((label, index) => ({ label, short: weekShorts[index], session: null })),
+      weekdays: [],
       sessionCount: 0,
       totalMinutes: 0,
       environmentLabel: equipmentText(equipment),
@@ -557,7 +560,9 @@ export function buildMovementPlan(
     };
   }
   const totalMinutes = Number(profile.minutes);
-  const days = trainingDays[profile.days];
+  const days = weekdays?.length
+    ? [...new Set(weekdays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b)
+    : trainingDays[profile.days];
   const pattern = sessionPattern[profile.goal];
   const used: Record<SessionTone, number> = { strength: 0, cardio: 0, mobility: 0 };
   const owns = (item: SpaceEquipment) => equipment.includes(item);
@@ -595,6 +600,7 @@ export function buildMovementPlan(
   return {
     sessions,
     week,
+    weekdays: days,
     sessionCount: sessions.length,
     totalMinutes: sessions.reduce((sum, session) => sum + session.minutes, 0),
     environmentLabel: equipmentText(equipment),

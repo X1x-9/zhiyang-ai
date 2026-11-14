@@ -23,7 +23,7 @@ export async function listWeightEntries(identity: Identity): Promise<WeightEntry
 
 export async function saveWeightEntry(
   identity: Identity,
-  input: { dateKey: string; kg: number; note: string },
+  input: { dateKey: string; kg: number; note?: string },
 ): Promise<WeightEntry> {
   if (identity.kind === "demo") return upsertDemoWeightEntry(identity.sessionId, input);
   return getPrisma().weightRecord.upsert({
@@ -32,9 +32,12 @@ export async function saveWeightEntry(
       profileId: identity.profileId,
       dateKey: input.dateKey,
       kg: input.kg,
-      note: input.note,
+      note: input.note ?? "",
     },
-    update: { kg: input.kg, note: input.note },
+    update: {
+      kg: input.kg,
+      ...(input.note !== undefined ? { note: input.note } : {}),
+    },
     select: { id: true, dateKey: true, kg: true, note: true },
   });
 }

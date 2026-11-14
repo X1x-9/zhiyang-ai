@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const entry = await saveWeightEntry(identity, {
       dateKey: parsed.data.dateKey,
       kg: Math.round(parsed.data.kg * 10) / 10,
-      note: parsed.data.note ?? "",
+      note: parsed.data.note,
     });
     let profileSynced = false;
     try {

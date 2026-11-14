@@ -168,6 +168,7 @@ export type PlanRevisionDirective = {
   } | null;
   movement: {
     days: SpaceDays | null;
+    weekdays?: number[] | null;
     minutes: SpaceMinutes | null;
     equipment: SpaceEquipment[] | null;
   } | null;
@@ -182,6 +183,7 @@ export type PlanRevisionState = {
   } | null;
   movement: {
     days: SpaceDays | null;
+    weekdays?: number[] | null;
     minutes: SpaceMinutes | null;
     equipment: SpaceEquipment[] | null;
   } | null;
@@ -359,13 +361,14 @@ function mergeRevisionState(
   if (directive.movement) {
     movement = {
       days: directive.movement.days ?? movement?.days ?? null,
+      weekdays: directive.movement.weekdays ?? movement?.weekdays ?? null,
       minutes: directive.movement.minutes ?? movement?.minutes ?? null,
       equipment: directive.movement.equipment ?? movement?.equipment ?? null,
     };
   }
 
   const dietActive = Boolean(diet && (diet.style || diet.removeSnack || diet.extraAvoid || diet.mealEdits.length > 0));
-  const movementActive = Boolean(movement && (movement.days || movement.minutes || movement.equipment?.length));
+  const movementActive = Boolean(movement && (movement.days || movement.weekdays?.length || movement.minutes || movement.equipment?.length));
   if (!dietActive && !movementActive) return prev ?? undefined;
   return { diet: dietActive ? diet : null, movement: movementActive ? movement : null };
 }
@@ -408,7 +411,7 @@ function buildPlanMovement(profile: SpaceProfile, state: PlanRevisionState | nul
         equipment: movement.equipment ?? profile.equipment,
       }
     : profile;
-  return buildMovementPlan(next, toMovementWeather(weather, now));
+  return buildMovementPlan(next, toMovementWeather(weather, now), movement?.weekdays ?? null);
 }
 
 function padDatePart(value: number) {
@@ -551,7 +554,8 @@ function mealSignature(plan: PlanDocument) {
 }
 
 function movementSignature(plan: PlanDocument) {
-  return `每周 ${plan.movement.sessionCount} 次 · 约 ${plan.movement.totalMinutes} 分钟 · ${plan.movement.environmentLabel}`;
+  const days = plan.movement.sessions.map((session) => session.day).join("、") || "无训练日";
+  return `每周 ${plan.movement.sessionCount} 次 · ${days} · 约 ${plan.movement.totalMinutes} 分钟 · ${plan.movement.environmentLabel}`;
 }
 
 function revisionSummary(previous: PlanDocument | null, plan: PlanDocument, changes: PlanRevision["changes"], requested: boolean) {

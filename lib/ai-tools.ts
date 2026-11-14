@@ -85,6 +85,41 @@ export function getVisionModel() {
   return getVisionProvider()(process.env.VISION_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini");
 }
 
+// Meal recognition has its own model knobs so it can use a low-latency model
+// without changing the general assistant/plan models. With
+// MEAL_DISABLE_THINKING=true we also turn off reasoning tokens for providers
+// that support enable_thinking, which is the main latency difference here.
+const mealFetch: typeof fetch = async (input, init) => {
+  if (process.env.MEAL_DISABLE_THINKING === "true" && init?.body && typeof init.body === "string") {
+    try {
+      const body = JSON.parse(init.body);
+      if (body && typeof body === "object" && Array.isArray(body.messages) && body.enable_thinking === undefined) {
+        init = { ...init, body: JSON.stringify({ ...body, enable_thinking: false }) };
+      }
+    } catch {
+      // Non-JSON request bodies are passed through unchanged.
+    }
+  }
+  return fetch(input, init);
+};
+
+function getMealProvider() {
+  const apiKey = process.env.MEAL_ANALYSIS_API_KEY?.trim() || process.env.VISION_API_KEY?.trim() || process.env.OPENAI_API_KEY;
+  const baseURL = process.env.MEAL_ANALYSIS_BASE_URL?.trim() || process.env.VISION_BASE_URL?.trim() || process.env.OPENAI_BASE_URL?.trim();
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+  return createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), fetch: mealFetch });
+}
+
+export function getMealVisionModel() {
+  return getMealProvider()(process.env.MEAL_VISION_MODEL || process.env.VISION_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini");
+}
+
+export function getMealAnalysisModel() {
+  const name = process.env.MEAL_ANALYSIS_MODEL?.trim();
+  if (name) return getMealProvider()(name);
+  return getModel();
+}
+
 export function isVisionConfigured() {
   return Boolean(process.env.VISION_API_KEY ? process.env.VISION_API_KEY : process.env.OPENAI_API_KEY);
 }

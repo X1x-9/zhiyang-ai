@@ -343,7 +343,7 @@ async function prepareImage(file: File): Promise<string> {
     const image = new Image();
     image.src = url;
     await image.decode().catch(() => { throw new Error("无法读取图片，请转为 JPG、PNG 或 WebP 后重试。"); });
-    const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+    const scale = Math.min(1, 1024 / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -352,7 +352,7 @@ async function prepareImage(file: File): Promise<string> {
     context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const data = canvas.toDataURL("image/jpeg", 0.82);
+    const data = canvas.toDataURL("image/jpeg", 0.74);
     if (data.length > 4 * 1024 * 1024 * 4 / 3) throw new Error("压缩后图片仍过大，请裁剪后重试。");
     return data;
   } finally {

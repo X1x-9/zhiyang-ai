@@ -11,9 +11,10 @@ import {
 import { IdentityError, resolveIdentity } from "@/lib/identity";
 import { deriveNutritionTargets } from "@/lib/nutrition-goal";
 import { loadProfile } from "@/lib/profile-store";
-import { profileWeightPoint, weightDateLabel, type WeekSummary } from "@/lib/dashboard";
+import { chinaWeekDates, profileWeightPoint, weightDateLabel, type WeekSummary } from "@/lib/dashboard";
 import { readProfileWeightKg } from "@/lib/space";
 import { listWeightEntries } from "@/lib/weight-store";
+import { listWorkoutRecords } from "@/lib/workout-store";
 
 export async function GET() {
   try {
@@ -25,8 +26,13 @@ export async function GET() {
       );
     }
 
+    const weekDates = chinaWeekDates();
+    const weekStartKey = weekDates[0].key;
+    const weekEndKey = weekDates[6].key;
+    const workoutRecords = await listWorkoutRecords(identity, weekStartKey, weekEndKey);
+
     if (identity.kind === "demo") {
-      return NextResponse.json(createDemoDashboard(identity.sessionId));
+      return NextResponse.json(createDemoDashboard(identity.sessionId, undefined, workoutRecords));
     }
 
     const prisma = getPrisma();
@@ -68,25 +74,21 @@ export async function GET() {
         }
       : null;
 
-    const todayKey = chinaDateKey();
-    const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-    const weekDays = weekdays.map((label, index) => {
-      const key = chinaDateKey(new Date(weekStart.getTime() + index * 86_400_000));
-      const [, month, day] = key.split("-");
-      const dayMeals = weekMeals.filter((meal) => chinaDateKey(meal.eatenAt) === key);
+    const weekDays = weekDates.map((day) => {
+      const dayMeals = weekMeals.filter((meal) => chinaDateKey(meal.eatenAt) === day.key);
+      const workoutMinutes = workoutRecords
+        .filter((record) => record.dateKey === day.key && record.completedAt)
+        .reduce((sum, record) => sum + record.minutes, 0);
       return {
-        key,
-        label,
-        dateLabel: `${Number(month)}/${Number(day)}`,
-        isToday: key === todayKey,
-        isFuture: key > todayKey,
+        ...day,
         meals: dayMeals.length,
         calories: dayMeals.reduce((sum, meal) => sum + (meal.estimatedKcal ?? 0), 0),
-        workoutMinutes: null,
+        workoutMinutes: workoutMinutes > 0 ? workoutMinutes : null,
       };
     });
     const recordedDays = weekDays.filter((day) => day.meals > 0).length;
-    const weekStartKey = chinaDateKey(weekStart);
+    const weekWorkouts = workoutRecords.filter((record) => record.completedAt).length;
+    const todayKey = chinaDateKey();
     const latestWeight = weightEntries[0] ?? null;
     const previousWeight = weightEntries[1] ?? null;
     const profilePoint = profileWeightPoint(readProfileWeightKg(profile));
@@ -99,12 +101,12 @@ export async function GET() {
     const week: WeekSummary = {
       recordedDays,
       meals: weekMeals.length,
-      workouts: null,
+      workouts: weekWorkouts,
       weightEntries: weekWeightEntries,
       note:
         recordedDays >= 4
-          ? "训练记录尚未接入，本次复盘按饮食与体重记录呈现。"
-          : `本周只有 ${recordedDays} 天饮食记录，暂不对执行情况作评价。`,
+          ? `本周已有 ${recordedDays} 天记录${weekWorkouts > 0 ? `、${weekWorkouts} 次训练` : ""}；复盘只按已有记录呈现，不补推缺失数据。`
+          : `本周只有 ${recordedDays} 天饮食记录，暂不对执行情况做评价。`,
       days: weekDays,
     };
 

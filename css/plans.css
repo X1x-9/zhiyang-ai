@@ -1516,8 +1516,38 @@
 
 .pp-session-tab-inner { position: relative; z-index: 2; display: grid; gap: 3px; }
 
-.pp-session-day { color: #9a6c3f; font-size: 9px; letter-spacing: .04em; transition: color .25s ease; }
+.pp-session-day {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9a6c3f;
+  font-size: 9px;
+  letter-spacing: .04em;
+  transition: color .25s ease;
+}
 .pp-session-tab.active .pp-session-day { color: #e7cd9b; }
+
+.pp-session-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .5);
+  color: #7f9182;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  transition: background-color .25s ease, color .25s ease;
+}
+
+.pp-session-state.is-complete { background: #e4eddd; color: #55755c; }
+.pp-session-state.is-future { background: rgba(255, 255, 255, .3); color: #a3ada2; }
+.pp-session-tab.active .pp-session-state { background: rgba(244, 241, 230, .16); color: rgba(244, 241, 230, .82); }
+.pp-session-tab.active .pp-session-state.is-complete { background: rgba(231, 205, 155, .2); color: #f0d9ad; }
+.pp-session-tab.active .pp-session-state.is-future { background: rgba(244, 241, 230, .1); color: rgba(244, 241, 230, .55); }
 .pp-session-tab strong { font-size: 12.5px; }
 .pp-session-tab small { color: #85948a; font-size: 9.5px; }
 .pp-session-tab.active small { color: rgba(244, 241, 230, .72); }
@@ -1577,10 +1607,106 @@
 
 .pp-steps li {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr) 28px;
+  align-items: start;
   gap: 12px;
   padding: 13px 0;
   border-top: 1px solid #e8eadf;
+}
+
+.pp-step-check {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pp-step-check input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pp-step-check svg {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pp-check-ring {
+  fill: rgba(255, 255, 255, .42);
+  stroke: rgba(111, 146, 114, .55);
+  stroke-width: 1.8;
+  transition: fill .25s ease, stroke .25s ease;
+}
+
+.pp-check-mark {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  transition: stroke-dasharray .5s ease, stroke-dashoffset .5s ease;
+}
+
+.pp-step-check input:checked + svg .pp-check-ring {
+  fill: #6f9272;
+  stroke: #6f9272;
+}
+
+.pp-step-check input:checked + svg .pp-check-mark {
+  stroke-dashoffset: 0;
+  transition-delay: .08s;
+}
+
+.pp-step-check input:focus-visible + svg {
+  outline: 2px solid rgba(74, 105, 82, .55);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.pp-step-check input:disabled { cursor: default; }
+.pp-step-check:has(input:disabled) { cursor: default; opacity: .42; }
+
+.pp-steps li.is-done .pp-step-num { color: #6f9272; }
+.pp-steps li.is-done strong { color: #6f7f72; }
+
+.pp-session-check-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: #879487;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.pp-session-check-state svg { flex: none; }
+.pp-session-check-state.is-complete { color: #5b7a61; }
+.pp-session-check-state.is-future { color: #a0a99f; }
+
+.pp-check-count {
+  color: #5f8066;
+  font-family: var(--pp-display);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-session-check-error {
+  margin: 6px 0 0;
+  color: #a4573f;
+  font-size: 10px;
 }
 
 .pp-step-num {
@@ -1942,7 +2068,9 @@
   .pp-session-head { flex-direction: column; gap: 8px; }
   .pp-session-head h3 { font-size: 20px; }
   .pp-session-head h3 small { display: block; margin: 3px 0 0; }
-  .pp-steps li { grid-template-columns: 30px minmax(0, 1fr); gap: 9px; }
+  .pp-steps li { grid-template-columns: 30px minmax(0, 1fr) 24px; gap: 9px; }
+  .pp-step-check { width: 24px; height: 24px; }
+  .pp-step-check svg { width: 24px; height: 24px; }
   .pp-step-num { font-size: 17px; }
   .pp-intensity { padding: 16px; }
   .pp-intensity-btn { font-size: 10px; }
@@ -1967,7 +2095,11 @@
   .pp-plate-disc,
   .pp-plate-ring,
   .pp-plate-scene .pp-instrument-head,
-  .pp-plate-scene .pp-plate-legend { transition: none; }
+  .pp-plate-scene .pp-plate-legend,
+  .pp-check-ring,
+  .pp-check-mark,
+  .pp-session-state,
+  .pp-session-day { transition: none; }
   .pp-meal-inner { transition-duration: .01ms; }
   .pp-meal,
   .pp-meal-sheet { transition: none; }
@@ -2251,6 +2383,71 @@
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: .04em;
+}
+
+.pp-daybook-icon {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #5f8066;
+  background: rgba(255, 255, 255, .58);
+  border: 1px solid rgba(95, 128, 102, .14);
+  box-shadow: 0 3px 8px -7px rgba(40, 62, 46, .7);
+}
+
+.pp-daybook-icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.pp-daybook-page .pp-daybook-icon {
+  top: 11px;
+  right: 13px;
+  color: #718570;
+  background: rgba(255, 255, 255, .34);
+  border-color: rgba(124, 139, 126, .12);
+  box-shadow: none;
+}
+
+.pp-daybook-cover .pp-daybook-icon {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  color: #5f8066;
+  background: rgba(255, 255, 255, .38);
+  border-color: rgba(95, 128, 102, .14);
+  opacity: .9;
+}
+
+.pp-daybook-cover .pp-daybook-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.pp-daybook.is-rest .pp-daybook-cover .pp-daybook-icon {
+  color: #98927e;
+  background: rgba(255, 255, 255, .34);
+  border-color: rgba(154, 149, 127, .18);
+}
+
+.pp-daybook.is-rest .pp-daybook-icon {
+  color: #9a957f;
+  background: rgba(255, 255, 255, .48);
+  border-color: rgba(154, 149, 127, .18);
+}
+
+.pp-daybook.is-rest .pp-daybook-page .pp-daybook-icon {
+  color: #a29c88;
+  background: rgba(255, 255, 255, .3);
 }
 
 .pp-daybook-page strong,

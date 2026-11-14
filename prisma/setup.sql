@@ -94,6 +94,22 @@ CREATE TABLE IF NOT EXISTS `WeightRecord` (
   INDEX `WeightRecord_profileId_dateKey_idx` (`profileId`, `dateKey`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `WorkoutRecord` (
+  `id` VARCHAR(191) NOT NULL,
+  `profileId` VARCHAR(191) NOT NULL,
+  `dateKey` VARCHAR(10) NOT NULL,
+  `sessionKey` VARCHAR(191) NOT NULL,
+  `title` VARCHAR(120) NOT NULL,
+  `minutes` INTEGER NOT NULL,
+  `steps` JSON NOT NULL,
+  `completedAt` DATETIME(3) NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `WorkoutRecord_profileId_dateKey_sessionKey_key` (`profileId`, `dateKey`, `sessionKey`),
+  INDEX `WorkoutRecord_profileId_dateKey_idx` (`profileId`, `dateKey`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `KnowledgeChunk` (
   `id` VARCHAR(191) NOT NULL,
   `title` VARCHAR(191) NOT NULL,
@@ -128,4 +144,8 @@ ALTER TABLE `Feedback`
 
 ALTER TABLE `WeightRecord`
   ADD CONSTRAINT `WeightRecord_profileId_fkey`
+  FOREIGN KEY (`profileId`) REFERENCES `HealthProfile`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `WorkoutRecord`
+  ADD CONSTRAINT `WorkoutRecord_profileId_fkey`
   FOREIGN KEY (`profileId`) REFERENCES `HealthProfile`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
